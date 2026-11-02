@@ -2,6 +2,10 @@
 
 All notable changes to MOKEapp. Dates are when the version was handed to the lab.
 
+## 0.2.3 — 2026-11-02
+- Citation metadata for the archived release on Zenodo (DOI): authors' ORCID iDs and the current
+  version in `CITATION.cff`, more keywords.
+
 ## 0.2.2 — 2026-11-02
 - README rewritten around a measurement, step by step, with screenshots of the interface
   (`docs/screenshots/`); MOKEapp described for longitudinal and polar MOKE.
