@@ -2,6 +2,10 @@
 
 All notable changes to MOKEapp. Dates are when the version was handed to the lab.
 
+## 0.2.4 — 2026-11-02
+- MOKEapp is archived on Zenodo: DOI 10.5281/zenodo.23890037 (all versions; v0.2.3 is
+  10.5281/zenodo.23890038). DOI badge and citation in the README, `doi` in `CITATION.cff`.
+
 ## 0.2.3 — 2026-11-02
 - Citation metadata for the archived release on Zenodo (DOI): authors' ORCID iDs and the current
   version in `CITATION.cff`, more keywords.

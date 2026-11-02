@@ -19,7 +19,15 @@ authors:
     affiliation: "Applied Magnetism and Spintronic Group, Universidad Técnica Federico Santa María"
     orcid: "https://orcid.org/0009-0006-8345-5079"
 repository-code: "https://github.com/Manolo-Cardona-M/MOKEapp"
-version: 0.2.3
+doi: 10.5281/zenodo.23890037
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23890037
+    description: "Concept DOI: all versions, resolves to the latest"
+  - type: doi
+    value: 10.5281/zenodo.23890038
+    description: "Version 0.2.3"
+version: 0.2.4
 date-released: 2026-11-02
 license: MIT
 keywords:

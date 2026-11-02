@@ -1,5 +1,7 @@
 # MOKEapp
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23890037.svg)](https://doi.org/10.5281/zenodo.23890037)
+
 **Measure magnetic hysteresis loops with a longitudinal or polar MOKE: from the instruments to Hc, in
 one desktop app.**
 
@@ -137,8 +139,10 @@ Universidad Técnica Federico Santa María (2026). MOKEapp is a Python port, ext
 program that Paul Carvajal Morales wrote to run the group's MOKE.
 
 Released under the [MIT licence](LICENSE): use, modify and share it freely, keeping the copyright
-notice. If it helps your work, please cite it ([CITATION.cff](CITATION.cff), or GitHub's "Cite this
-repository" button).
+notice. If it helps your work, please cite it: Cardona, M. and Carvajal Morales, P., *MOKEapp*,
+Zenodo, [doi:10.5281/zenodo.23890037](https://doi.org/10.5281/zenodo.23890037). This DOI always points to
+the latest version; each version has its own DOI on Zenodo. See also [CITATION.cff](CITATION.cff) or
+GitHub's "Cite this repository" button.
 
 **Acknowledgements.** We thank Prof. Carlos García García for funding the development of this software.
 The code was written with the help of Claude (Anthropic) as an AI coding assistant; design decisions,
