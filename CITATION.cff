@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use MOKEapp in your work, please cite it as below."
+title: "MOKEapp: control and analysis software for longitudinal and polar MOKE magnetometers"
+abstract: >-
+  Desktop application that runs a longitudinal or polar magneto-optical Kerr effect (MOKE) magnetometer:
+  a Keithley multimeter reads the photodetector and an NI DAQ programs a Kepco bipolar supply that
+  drives the electromagnet. It measures hysteresis loops point by point with safety checks, saves
+  self-describing CSV files, calibrates the field with a Hall probe and analyses the loops
+  (coercive field, drift correction, odd/even symmetrisation).
+type: software
+authors:
+  - given-names: Manolo
+    family-names: Cardona
+    email: manolo.cardonamenco@gmail.com
+    affiliation: "Applied Magnetism and Spintronic Group, Universidad Técnica Federico Santa María"
+  - given-names: Paul
+    family-names: Carvajal Morales
+    affiliation: "Applied Magnetism and Spintronic Group, Universidad Técnica Federico Santa María"
+repository-code: "https://github.com/Manolo-Cardona-M/MOKEapp"
+version: 0.2.1
+date-released: 2026-11-02
+license: MIT
+keywords:
+  - MOKE
+  - magneto-optical Kerr effect
+  - magnetometry
+  - hysteresis
+  - laboratory automation
+  - PySide6

@@ -1,0 +1,8 @@
+# Versions tested on MOKE Lab 1 (Python 3.14, NI-VISA 26.3, NI-DAQmx 26.3)
+PyVISA==1.16.2
+nidaqmx==1.7.0
+numpy==2.5.4
+PySide6==6.12.0
+pyqtgraph==0.14.0
+PyYAML==6.0.3
+pytest==9.2.0

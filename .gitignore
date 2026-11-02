@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Produced while running: stay on each PC
+logs/
+data/
+
+# Each PC's own setups (created in Instruments > Setup); config/example_setup.yaml is the shared template
+config/*.yaml
+!config/example_setup.yaml
+
+# Field calibrations belong to the magnet of each PC (back them up separately); the second line is
+# the old per-setup format, still imported automatically
+calibrations/
+config/calibrations_*.yaml
+
+# Local notes about this lab's instruments and history (not part of the app)
+CLAUDE.local.md
+docs/legacy_labview/
+docs/labview_migration.md
+tools/
+
+# Temporary files written atomically by the app
+*.tmp

@@ -1,0 +1,54 @@
+# MOKEapp setup example (the instruments of one MOKE). You normally do not edit this by hand:
+# Instruments > Setup... finds your instruments and saves config/<your setup>.yaml.
+# This example is a working setup: Keithley 2000 on GPIB, NI USB-6002, Kepco BOP 50-8M with its monitors wired.
+#   python main.py --config config/example_setup.yaml
+
+name: Example MOKE
+
+multimeter:                      # reads the photodetector
+  address: GPIB0::26::INSTR      # VISA address: GPIB0::n::INSTR, USB0::...::INSTR
+  profile: auto                  # auto (from *IDN?), k2000, dmm6500, k2100 or scpi
+  terminals: rear                # where the photodetector is plugged: rear, front or any
+  timeout_ms: 5000
+  range_V: 10.0                  # 0.1, 1, 10, 100, 1000 or auto
+  nplc: 1.0
+  filter: 'off'                  # off or repeat
+  filter_count: 10
+
+daq:                             # any NI-DAQmx device
+  device: Dev1
+  model: USB-6002
+  ao_channel: Dev1/ao0           # -> Kepco programming input
+  monitors: true                 # Kepco current/voltage monitors wired to the two inputs below
+  ai_current: Dev1/ai0           # current monitor (differential with ai4 on a USB-6002)
+  ai_voltage: Dev1/ai1           # voltage monitor (differential with ai5)
+  ai_terminal: DIFF              # DIFF, RSE or NRSE
+  ai_rate: 5000.0                # S/s per channel
+  ai_samples: 50                 # averaged per point (10 ms)
+  ai_hall: ''                    # Hall probe analog output, e.g. Dev1/ai2 ('' = none)
+  hall_mT_per_V: 0.0
+  hall_offset_mT: 0.0
+
+kepco:                           # bipolar supply programmed by the DAQ, driving the electromagnet
+  model: BOP 50-8M
+  gain: -5.0                     # magnet volts per programming volt (negative = inverting)
+  v_max: 50.0
+  i_max: 8.0
+  current_monitor_A_per_V: 0.8   # 10 V = 8 A
+  voltage_monitor_V_per_V: 5.0   # 10 V = 50 V
+  magnet_resistance_ohm: 2.19    # nominal magnet R: current limit and programmed current I = V/R
+  slew_rate_V_per_s: 100.0       # max dV/dt at the magnet
+
+safety:                          # only used with monitors
+  current_tolerance_A: 0.3       # |I_measured - I_expected| allowed ...
+  current_tolerance_frac: 0.4    # ... or this fraction of I_expected, whichever is larger
+  min_current_for_checks_A: 0.2
+  resistance_warn_frac: 0.1      # warn when the magnet R rises 10 % (heating)
+  resistance_stop_frac: 0.3      # stop at 30 %
+
+defaults:                        # sweep values shown when the app starts
+  waveform: triangle
+  amplitude_V: 2.5
+  points_per_cycle: 200
+  settle_ms: 50.0
+  cycles: 5
