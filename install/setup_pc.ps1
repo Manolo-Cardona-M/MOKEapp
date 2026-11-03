@@ -2,7 +2,7 @@
 Installs MOKEapp on a new PC.
 
   1. Install from ni.com: NI-VISA, NI-488.2 (for a GPIB multimeter) and NI-DAQmx (a version that lists
-     your DAQ as supported). Install Python 3.12 or newer from python.org, and Git.
+     your DAQ as supported). Install Python 3.14 from python.org, and Git.
   2. git clone https://github.com/Manolo-Cardona-M/MOKEapp.git
   3. In PowerShell, from the MOKEapp folder:   powershell -ExecutionPolicy Bypass -File install\setup_pc.ps1
   4. Open MOKEapp from the desktop icon: the first time it asks for the instruments (Instruments > Setup).
@@ -34,14 +34,14 @@ foreach ($d in @(@{Key = "NI-VISA"; Why = "talks to the multimeter (GPIB/USB)"},
 
 # --- Python
 $py = $null
-foreach ($cmd in @("py -3", "python")) {
+foreach ($cmd in @("py -3.14", "py -3", "python")) {
     try {
         $v = Invoke-Expression "$cmd -c `"import sys; print('%d.%d' % sys.version_info[:2])`"" 2>$null
-        if ($v -and [version]$v -ge [version]"3.12") { $py = $cmd; break }
+        if ($v -and [version]$v -ge [version]"3.14") { $py = $cmd; break }
     } catch {}
 }
 if (-not $py) {
-    Write-Host "  [missing] Python 3.12+ (python.org; tick 'Add python.exe to PATH')." -ForegroundColor Red
+    Write-Host "  [missing] Python 3.14 (python.org; tick 'Add python.exe to PATH')." -ForegroundColor Red
     exit 1
 }
 Write-Host "  [ok]      Python ($py)"

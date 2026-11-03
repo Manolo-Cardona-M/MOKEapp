@@ -38,7 +38,7 @@ loops. It works with any longitudinal or polar setup built this way.
 
 ## What you need
 
-- **Windows** with Python 3.12+ and, from ni.com, **NI-VISA**, **NI-488.2** (GPIB multimeters) and
+- **Windows** with Python 3.14 (the tested version; 3.12 does not work) and, from ni.com, **NI-VISA**, **NI-488.2** (GPIB multimeters) and
   **NI-DAQmx**.
 - A **multimeter** reading the photodetector (GPIB or USB, SCPI).
 - An **NI DAQ** with one analog output; two more analog inputs if you wire the supply's current and

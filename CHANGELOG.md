@@ -2,6 +2,11 @@
 
 All notable changes to MOKEapp. Dates are when the version was handed to the lab.
 
+## 0.2.5 — 2026-11-03
+- **Fix (install):** MOKEapp needs Python 3.14, not "3.12+": on 3.12 it fails at import
+  (`threading.Lock | None` in `gui/state.py`). README and `install/setup_pc.ps1` now ask for 3.14,
+  and the script prefers `py -3.14` when several Pythons are installed.
+
 ## 0.2.4 — 2026-11-02
 - MOKEapp is archived on Zenodo: DOI 10.5281/zenodo.23890037 (all versions; v0.2.3 is
   10.5281/zenodo.23890038). DOI badge and citation in the README, `doi` in `CITATION.cff`.
