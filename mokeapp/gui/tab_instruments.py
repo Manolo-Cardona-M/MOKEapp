@@ -204,11 +204,12 @@ class InstrumentsTab(QWidget):
 
     # ----------------------------------------------------------- helpers
     def _update_limits(self):
-        vmax = self.state.max_voltage
+        vmax, vrec = self.state.max_voltage, self.state.recommended_voltage    # hard / recommended
         self.manual_v.setRange(-vmax, vmax)
         i_max = vmax / self.state.cfg.kepco.magnet_resistance_ohm
         self.manual_i.setRange(-i_max, i_max)
-        self.manual_max.setText(f"max ±{vmax:.1f} V ({vmax / self.state.resistance:.1f} A)")
+        self.manual_max.setText(f"rec. max ±{vrec:.1f} V ({vrec / self.state.resistance:.1f} A)")
+        self.manual_max.setToolTip(f"Allowed up to ±{vmax:.1f} V (Kepco / DAQ limit)")
 
     def _refresh_buttons(self):
         s = self.state

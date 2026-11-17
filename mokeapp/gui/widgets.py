@@ -25,6 +25,49 @@ class StatusLight(QLabel):
         self.setStyleSheet(f"background:{COLORS[state]}; border-radius:8px;")
 
 
+class MagnetHeatPill(QLabel):
+    """Live magnet temperature from the Kepco monitors (R = V/I): green, amber above the Setup's warning
+    rise, red above its stop rise. It only informs; whether a hot magnet stops the run is a Setup choice."""
+
+    STATES = {"none": "off", "ok": "ok", "warm": "warn", "hot": "hot"}
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("statusPill")
+        self.setWordWrap(True)
+        self.reset(monitors=False)
+
+    def reset(self, monitors: bool, safety=None, r_cold: float | None = None) -> None:
+        if not monitors:
+            self._show("off", "Magnet temperature: needs the Kepco monitors")
+            self.setToolTip("Wire the Kepco current/voltage monitors (Setup) to follow the magnet temperature.")
+            return
+        self._show("off", "Magnet: waiting for current")
+        if safety is not None and r_cold:
+            stop = (f"stops the run above +{safety.resistance_stop_frac * 100:.0f} %" if safety.stop_on_overheat
+                    else "never stops the run (Setup)")
+            self.setToolTip(f"Magnet resistance V/I at the Kepco monitors, against the cold R = {r_cold:.3f} Ω "
+                            f"(diagnostics).\nCopper: +0.39 % per °C. Amber above "
+                            f"+{safety.resistance_warn_frac * 100:.0f} %, red above "
+                            f"+{safety.resistance_stop_frac * 100:.0f} %; {stop}.")
+
+    def update_heat(self, h) -> None:
+        if h is None or h.level == "none":
+            return
+        self._show(self.STATES[h.level],
+                   f"Magnet {h.r_ohm:.3f} Ω · {h.rise * 100:+.1f} % ≈ {h.delta_c:+.0f} °C   "
+                   f"(max {h.peak_rise * 100:+.1f} %)")
+
+    def _show(self, state: str, text: str) -> None:
+        self.setText(f"●  {text}")
+        self.setProperty("state", state)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        if not theme.current.get("styled"):
+            color = {"ok": "#2e9d4a", "warn": "#d99a1e", "hot": "#d33f3f", "off": "#9a9a9a"}[state]
+            self.setStyleSheet(f"color:{color}; font-weight:bold;")
+
+
 def make_plot(title: str, xlabel: str, ylabel: str) -> pg.PlotWidget:
     w = pg.PlotWidget(title=title)
     w.setLabel("bottom", xlabel)
@@ -254,7 +297,7 @@ class SweepParams(QGroupBox):
         form.addRow("Time per cycle", self.time_label)
 
         self.update_limits()
-        self.amplitude.setValue(min(d.amplitude_V, state.max_voltage))
+        self.amplitude.setValue(min(d.amplitude_V, state.recommended_voltage))
         for sig in (self.amplitude.valueChanged, self.points.valueChanged, self.settle.valueChanged):
             sig.connect(self._update_labels)
         state.limits_changed.connect(self.update_limits)
@@ -262,16 +305,22 @@ class SweepParams(QGroupBox):
         self._update_labels()
 
     def update_limits(self) -> None:
-        vmax = self.state.max_voltage
+        """The box stops at the hard limit (Kepco / DAQ); the label shows the recommended maximum from the
+        Setup's current limit, which can be exceeded on purpose."""
+        vmax, vrec = self.state.max_voltage, self.state.recommended_voltage
         self.amplitude.setRange(0.0, vmax)
-        self.max_label.setText(f"max ±{vmax:.1f} V")
-        self.max_label.setToolTip(f"Kepco current limit: {vmax / self.state.resistance:.1f} A with the magnet's "
-                                  f"R = {self.state.resistance:.2f} Ω")
+        self.max_label.setText(f"rec. max ±{vrec:.1f} V")
+        self.max_label.setToolTip(f"Recommended: {vrec / self.state.resistance:.1f} A (Max current in Setup) with "
+                                  f"the magnet's R = {self.state.resistance:.2f} Ω.\nAbove it is allowed up to "
+                                  f"±{vmax:.1f} V, what the Kepco and the DAQ can deliver: watch the magnet "
+                                  "indicator.")
         self._update_labels()
 
     def _update_labels(self) -> None:
         i = self.amplitude.value() / self.state.resistance
         text = f"≈ ±{i:.2f} A"
+        if self.amplitude.value() > self.state.recommended_voltage + 1e-9:
+            text += f" — above the {self.state.cfg.kepco.i_max:g} A recommended"
         cal = self.state.calibration
         if cal is not None:
             b = max(abs(float(cal.field(i))), abs(float(cal.field(-i))))

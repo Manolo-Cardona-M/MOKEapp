@@ -12,10 +12,13 @@ RAMP_STEP_S = 0.005
 
 
 class KepcoBOP:
-    def __init__(self, cfg: KepcoConfig, daq, max_voltage: float):
+    def __init__(self, cfg: KepcoConfig, daq, max_voltage: float, recommended_voltage: float | None = None):
+        """max_voltage: hard limit, every setpoint is clamped to it. recommended_voltage: the current limit
+        (i_max × R) shown to the user, not enforced."""
         self.cfg = cfg
         self.daq = daq
         self.max_voltage = max_voltage
+        self.recommended_voltage = max_voltage if recommended_voltage is None else recommended_voltage
         self.resistance_ohm = cfg.magnet_resistance_ohm
         self.output_V = 0.0
         self._lock = threading.Lock()

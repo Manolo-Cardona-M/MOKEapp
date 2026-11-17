@@ -16,6 +16,7 @@ import numpy as np
 import mokeapp
 from mokeapp.core import storage
 from mokeapp.core.calibration import MT_TO_OE
+from mokeapp.core.heating import MIN_CURRENT_FRACTION, HeatState, MagnetHeat
 from mokeapp.core.processing import average_cycles, correct_drift, drift_fit_plateaus
 from mokeapp.core.waveforms import make_waveform
 
@@ -54,11 +55,17 @@ class Point:
     signal: float
     hall_mT: float | None = None    # only with a Hall probe wired to the DAQ
     i_set: float = float("nan")     # programmed current V / nominal R
+    heat: HeatState | None = None   # live magnet heating estimate (Kepco monitors only)
 
     @property
     def x_current(self) -> float:
         """Measured current when there are monitors, else the programmed one."""
         return self.i_set if np.isnan(self.current) else self.current
+
+    @property
+    def r_magnet(self) -> float:
+        """V/I at the Kepco monitors for this point; NaN without monitors or below 0.05 A."""
+        return self.v_kepco / self.current if abs(self.current) >= 0.05 else NAN
 
 
 @dataclass
@@ -109,20 +116,31 @@ class SweepRunner:
         dc = settings.drift_correction      # older callers passed a bool
         self.drift_method = "endpoints" if dc is True else ("off" if dc is False else dc)
         self._warned: set[str] = set()
+        self.heat: MagnetHeat | None = None     # created in run(), when the amplitude and cold R are known
 
     def stop(self) -> None:
         self.stop_event.set()
 
     # ---------------------------------------------------------------- safety
-    def _warn(self, key: str, msg: str) -> None:
+    def _warn(self, key: str, msg: str, show: bool = True) -> None:
+        """Once per run: log it and keep it in the result; show=False keeps it out of the tab's warning box
+        (things the live indicators already show, like the magnet heating)."""
         if key not in self._warned:
             self._warned.add(key)
             self.result.warnings.append(msg)
             log.warning(msg)
-            self.on_warning(msg)
+            if show:
+                self.on_warning(msg)
+
+    def _new_heat(self, amplitude_V: float) -> MagnetHeat:
+        sc = self.cfg.safety
+        r_cold = self.inst.kepco.resistance_ohm
+        peak_A = abs(amplitude_V) / r_cold
+        return MagnetHeat(r_cold, max(sc.min_current_for_checks_A, MIN_CURRENT_FRACTION * peak_A),
+                          sc.resistance_warn_frac, sc.resistance_stop_frac)
 
     def _monitor_problem(self, v_set: float, v_meas: float, i_meas: float) -> str:
-        """'' if the Kepco monitors agree with the setpoint, else the reason (also flags a hot magnet)."""
+        """'' if the Kepco monitors agree with the setpoint, else the reason (open magnet, Kepco off...)."""
         sc = self.cfg.safety
         r_ref = self.inst.kepco.resistance_ohm
         i_exp = v_set / r_ref
@@ -132,18 +150,15 @@ class SweepRunner:
         if abs(i_meas - i_exp) > tol:
             return (f"Magnet current {i_meas:+.3f} A does not match expected {i_exp:+.3f} A "
                     f"(at {v_set:+.2f} V, Kepco reads {v_meas:+.2f} V). Check the magnet connection and the Kepco.")
-        if abs(i_meas) > sc.min_current_for_checks_A:
-            rise = (v_meas / i_meas) / r_ref - 1
-            if rise > sc.resistance_warn_frac:
-                return "hot"
         return ""
 
     def _confirm_monitors(self, v_set: float, v_meas: float, i_meas: float) -> tuple[float, float]:
         """Re-measure when the monitors disagree with the setpoint, before believing it.
 
         The USB-6002 occasionally returns one bad capture (seen as 0 A on the first point after the
-        app sat idle, or a fake 16 % resistance rise). A real fault (open magnet, Kepco off) persists
-        through the retries and still stops the run, ~0.2 s later.
+        app sat idle). A real fault (open magnet, Kepco off) persists through the retries and still stops
+        the run, ~0.2 s later. A single fake resistance jump no longer matters: the heating estimate is a
+        running median.
         """
         problem = self._monitor_problem(v_set, v_meas, i_meas)
         if not problem:
@@ -159,9 +174,7 @@ class SweepRunner:
                 self.result.monitor_glitches += 1
                 log.warning("Monitor reading recovered on retry %d (V=%+.3f, I=%+.3f)", attempt, v_meas, i_meas)
                 return v_meas, i_meas
-        if problem != "hot":
-            raise SafetyError(problem)
-        return v_meas, i_meas
+        raise SafetyError(problem)
 
     def _check_drift(self, cycle: int, signal, current, times) -> None:
         """Warn (once) when the signal drifts by more than DRIFT_WARN of the Kerr step within a cycle."""
@@ -176,17 +189,17 @@ class SweepRunner:
     def _check(self, p: Point) -> None:
         sc = self.cfg.safety
         if self.monitors:   # without monitors there is no measured current: these checks cannot run
-            r_ref = self.inst.kepco.resistance_ohm
-            v_meas, i_meas = p.v_kepco, p.current
-            if abs(p.v_programmed / r_ref) >= sc.min_current_for_checks_A and abs(i_meas) > sc.min_current_for_checks_A:
-                r = v_meas / i_meas
-                rise = r / r_ref - 1
-                if rise > sc.resistance_stop_frac:
-                    raise SafetyError(f"Magnet resistance rose {rise * 100:.0f} % ({r:.2f} Ω): magnet overheating.")
-                if rise > sc.resistance_warn_frac:
-                    self._warn("hot", f"Magnet resistance rose {rise * 100:.0f} % ({r:.2f} Ω): magnet is heating up.")
-            if abs(i_meas) >= 0.98 * self.cfg.kepco.i_max:
-                self._warn("ilimit", "Kepco is at its current limit: the field no longer follows the setpoint.")
+            h = p.heat = self.heat.add(p.v_kepco, p.current)
+            if h.level == "hot" and sc.stop_on_overheat:
+                raise SafetyError(f"Magnet resistance rose {h.rise * 100:.0f} % ({h.r_ohm:.2f} Ω, ≈ +{h.delta_c:.0f} °C): "
+                                  "magnet overheating. Turn off 'Stop the run if the magnet overheats' in Setup "
+                                  "to keep measuring with the indicator only.")
+            if h.level in ("warm", "hot"):
+                self._warn("hot", f"Magnet resistance rose {h.rise * 100:.0f} % ({h.r_ohm:.2f} Ω, "
+                                  f"≈ +{h.delta_c:.0f} °C): magnet is heating up.", show=False)
+            if abs(p.current) > self.cfg.kepco.i_max:
+                self._warn("ilimit", f"Magnet current {p.current:+.2f} A is above the {self.cfg.kepco.i_max:g} A "
+                                     "recommended in Setup.", show=False)
         if self.cal:
             i_cal = self._calibration_current(p)
             if not self.cal.in_range(i_cal):
@@ -243,6 +256,7 @@ class SweepRunner:
         cal = self.cal
         kepco, keithley, daq = self.inst.kepco, self.inst.keithley, self.inst.daq
         wave = make_waveform(s.waveform, kepco.clamp(s.amplitude_V), s.points_per_cycle)
+        self.heat = self._new_heat(kepco.clamp(s.amplitude_V)) if self.monitors else None
         settle = s.settle_ms / 1000.0
         started = datetime.now()
         raw_writer = None
@@ -335,7 +349,7 @@ class SweepRunner:
     def _row(self, p: Point) -> list:
         """One raw CSV row, in the order of storage.raw_columns(monitors) + field columns."""
         return ([p.index, p.time_s, p.cycle, p.v_programmed, p.i_set]
-                + ([p.v_kepco, p.current] if self.monitors else []) + [p.signal]
+                + ([p.v_kepco, p.current, p.r_magnet] if self.monitors else []) + [p.signal]
                 + (self._fields(p) if self.cal else [])
                 + ([p.hall_mT, p.hall_mT * MT_TO_OE] if self.hall else []))
 

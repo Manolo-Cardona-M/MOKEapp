@@ -12,7 +12,8 @@ from mokeapp.core.acquisition import SweepSettings
 from mokeapp.core.processing import stability_report
 from mokeapp.gui import theme
 from mokeapp.gui.state import SweepThread
-from mokeapp.gui.widgets import AutoScale, DriftCombo, SweepParams, XAxisToggle, make_plot, to_x, x_label
+from mokeapp.gui.widgets import (AutoScale, DriftCombo, MagnetHeatPill, SweepParams, XAxisToggle, make_plot, to_x,
+                                 x_label)
 
 log = logging.getLogger(__name__)
 
@@ -94,6 +95,8 @@ class MeasureTab(QWidget):
         self.warnings = QPlainTextEdit()
         self.warnings.setReadOnly(True)
         self.warnings.setMaximumHeight(60)
+        self.heat = MagnetHeatPill()
+        self.heat.reset(state.inst.monitors)
         # only shown when there is something to show, so the panel fits a 768-px-high screen
         for w in (self.warnings, self.saved, self.open_btn):
             w.setVisible(False)
@@ -127,6 +130,7 @@ class MeasureTab(QWidget):
     def _point(self, p):
         self._last_point = p
         self._dirty = True
+        self.heat.update_heat(p.heat)
         self.on_point(p)
 
     def controls_box(self, *extra: QWidget) -> QWidget:
@@ -156,6 +160,7 @@ class MeasureTab(QWidget):
         pv = QVBoxLayout(panel)
         pv.setContentsMargins(0, 0, 0, 0)
         pv.addWidget(scroll, 1)
+        pv.addWidget(self.heat)     # pinned with Start/Stop: always visible while measuring
         h = QHBoxLayout()
         h.setContentsMargins(0, 0, 6, 0)
         h.addWidget(self.start_btn, 2)
@@ -213,6 +218,7 @@ class MeasureTab(QWidget):
                                                                          "open it in Analysis and save it there)")
         self.saved.setVisible(self.save is not None)
         self.open_btn.setEnabled(False)
+        self.heat.reset(self.state.inst.monitors, self.state.cfg.safety, self.state.resistance)
         self.on_start(s)
         self.autoscale.fit()    # new parameters, new ranges: never start with the old zoom
         self.thread = SweepThread(self.state.inst, s, self, lock=self.state.io_lock)

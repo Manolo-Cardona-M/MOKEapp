@@ -440,3 +440,29 @@ def test_autoscale_comes_back_after_zoom(window):
     assert not hyst.autoscale.on and "OFF" in hyst.autoscale.button.text()
     hyst.autoscale.button.click()                   # one click: back on and re-fitted
     assert hyst.autoscale.on and all(vb.state["autoRange"])
+
+
+def test_magnet_indicator_and_amplitude_above_the_recommended_max(window):
+    app, win = window
+    ins, hyst = win.instruments, win.hysteresis
+    win.state.cfg.safety.stop_on_overheat = False
+    ins.do_connect()
+    wait_until(app, lambda: not win.state.busy)
+    ins.do_diagnostics()
+    wait_until(app, lambda: win.state.diagnostics is not None and not win.state.busy)
+    assert "waiting" in hyst.heat.text() or "Kepco monitors" in hyst.heat.text()
+
+    rec = win.state.recommended_voltage
+    hyst.params.amplitude.setValue(rec + 2)               # allowed, with a note
+    assert hyst.params.amplitude.value() == pytest.approx(rec + 2, abs=0.01)   # the box has 2 decimals
+    assert "recommended" in hyst.params.current_label.text()
+
+    win.state.inst.sim_lab.resistance_ohm *= 1.4          # the coil heats up: red, but the run goes on
+    hyst.cycles.setValue(1)
+    hyst.params.points.setValue(30)
+    hyst.params.settle.setValue(0)
+    hyst.start()
+    wait_until(app, lambda: hyst.thread is None)
+    assert "Finished: 1 complete" in hyst.progress.text()
+    assert hyst.heat.property("state") == "hot" and "°C" in hyst.heat.text()
+    assert not hyst.warnings.isVisible()                   # no message box text for the heating

@@ -70,8 +70,9 @@ class SafetyConfig:
     current_tolerance_A: float = 0.3
     current_tolerance_frac: float = 0.4
     min_current_for_checks_A: float = 0.2
-    resistance_warn_frac: float = 0.10
-    resistance_stop_frac: float = 0.30
+    resistance_warn_frac: float = 0.10     # the live magnet indicator turns amber (≈ +25 °C in copper)
+    resistance_stop_frac: float = 0.30     # ... and red (≈ +75 °C)
+    stop_on_overheat: bool = True          # stop the run at resistance_stop_frac; off = indicator only
 
 
 @dataclass
@@ -97,10 +98,15 @@ class SetupConfig:
     calibration: CoilCalibration | None = None
 
     def max_magnet_voltage(self, resistance_ohm: float | None = None, ao_limit_V: float = 10.0) -> float:
-        """Largest magnet voltage allowed: Kepco voltage limit, current limit, or what the DAQ's analog
-        output can program (|gain| × AO range), whichever is lower."""
+        """Recommended largest magnet voltage: the hard limit, or the current limit i_max × R if lower.
+        Shown to the user; going above it is allowed (the magnet's real limit is often unknown)."""
         r = resistance_ohm or self.kepco.magnet_resistance_ohm
-        return min(self.kepco.v_max, self.kepco.i_max * r, abs(self.kepco.gain) * ao_limit_V)
+        return min(self.hard_magnet_voltage(ao_limit_V), self.kepco.i_max * r)
+
+    def hard_magnet_voltage(self, ao_limit_V: float = 10.0) -> float:
+        """What the hardware can deliver: the Kepco voltage limit or |gain| × the DAQ's AO range, whichever
+        is lower. Nothing is ever programmed above this."""
+        return min(self.kepco.v_max, abs(self.kepco.gain) * ao_limit_V)
 
     @property
     def multimeter(self) -> KeithleyConfig:
@@ -202,6 +208,8 @@ def _validate(cfg: SetupConfig) -> None:
         raise ConfigError("[multimeter] terminals must be rear, front or any")
     if not isinstance(cfg.daq.monitors, bool):
         raise ConfigError("[daq] monitors must be true or false")
+    if not isinstance(cfg.safety.stop_on_overheat, bool):
+        raise ConfigError("[safety] stop_on_overheat must be true or false")
     if cfg.daq.ai_terminal not in ("DIFF", "RSE", "NRSE"):
         raise ConfigError("[daq] ai_terminal must be DIFF, RSE or NRSE")
     kp = cfg.kepco

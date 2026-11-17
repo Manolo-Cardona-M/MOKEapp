@@ -22,7 +22,7 @@ class Instruments:
             self.sim_lab = None
             self.keithley = ScpiMultimeter(cfg.keithley)
             self.daq = NiDaq(cfg.daq)
-        self.kepco = KepcoBOP(cfg.kepco, self.daq, cfg.max_magnet_voltage())
+        self.kepco = KepcoBOP(cfg.kepco, self.daq, cfg.hard_magnet_voltage(), cfg.max_magnet_voltage())
         self.status: dict[str, tuple[bool, str]] = {
             "keithley": (False, "not connected"),
             "daq": (False, "not connected"),
@@ -39,11 +39,13 @@ class Instruments:
         return self.cfg.daq.monitors
 
     def update_limits(self, resistance_ohm: float | None = None) -> None:
-        """Max magnet voltage from the Kepco limits, the magnet R and what the DAQ's AO can program."""
+        """Hard magnet voltage limit (Kepco v_max, what the DAQ's AO can program) and the recommended one
+        (also the current limit i_max × the magnet R)."""
         if resistance_ohm:
             self.kepco.resistance_ohm = resistance_ohm
-        self.kepco.max_voltage = self.cfg.max_magnet_voltage(self.kepco.resistance_ohm,
-                                                             getattr(self.daq, "ao_limit", 10.0))
+        ao = getattr(self.daq, "ao_limit", 10.0)
+        self.kepco.max_voltage = self.cfg.hard_magnet_voltage(ao)
+        self.kepco.recommended_voltage = self.cfg.max_magnet_voltage(self.kepco.resistance_ohm, ao)
 
     @property
     def hall_enabled(self) -> bool:

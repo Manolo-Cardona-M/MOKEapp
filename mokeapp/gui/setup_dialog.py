@@ -152,6 +152,14 @@ class SetupDialog(QDialog):
         f.addRow("Max slew rate", self.slew)
         f.addRow("Current monitor scale", self.i_mon)
         f.addRow("Voltage monitor scale", self.v_mon)
+        self.stop_hot = QCheckBox("Stop the run if the magnet overheats")
+        self.stop_hot.setChecked(c.safety.stop_on_overheat)
+        self.stop_hot.setToolTip(f"Stop when the magnet resistance rises {c.safety.resistance_stop_frac * 100:.0f} % "
+                                 "(≈ +75 °C in copper).\nOff: the live magnet indicator in Continuous and "
+                                 "Hysteresis turns red, but the run goes on.")
+        f.addRow("", self.stop_hot)
+        f.addRow("", _hint("Max current is the recommended limit: the sweep tabs show it but let you go above it, "
+                           "up to what the Kepco and the DAQ can deliver."))
         v.addWidget(box)
 
         scroll = QScrollArea()
@@ -250,7 +258,7 @@ class SetupDialog(QDialog):
 
     def _enable(self):
         mon = self.monitors.isChecked()
-        for w in (self.ai_current, self.ai_voltage, self.i_mon, self.v_mon):
+        for w in (self.ai_current, self.ai_voltage, self.i_mon, self.v_mon, self.stop_hot):
             w.setEnabled(mon)
         hall = self.ai_hall.currentText() not in ("", NO_HALL)
         for w in (self.hall_scale, self.hall_offset):
@@ -284,6 +292,7 @@ class SetupDialog(QDialog):
         k.gain, k.v_max, k.i_max = self.gain.value(), self.v_max.value(), self.i_max.value()
         k.magnet_resistance_ohm, k.slew_rate_V_per_s = self.r_nom.value(), self.slew.value()
         k.current_monitor_A_per_V, k.voltage_monitor_V_per_V = self.i_mon.value(), self.v_mon.value()
+        c.safety.stop_on_overheat = self.stop_hot.isChecked()
         return c
 
     def problems(self, c: SetupConfig) -> tuple[list[str], list[str]]:

@@ -71,10 +71,13 @@ back through Qt signals; the plots redraw at most every 50 ms.
 **Safety layers.** AO clamp to the device range; magnet voltage clamp to min(v_max, i_max·R, |gain|·AO);
 slew-rate ramp on every change; ramp to 0 on stop, error, close, `atexit` and the excepthook; with
 monitors: current-mismatch watchdog (re-measured twice before stopping, because the USB-6002 sometimes
-returns one bad capture), resistance rise (overheating) warn/stop, current-limit warning.
+returns one bad capture), magnet heating (`core/heating.py`: running median of V/I, shown live; stops the run
+only with `safety.stop_on_overheat`), current above the recommended `i_max` (logged). The hard voltage limit
+is `cfg.hard_magnet_voltage()` (Kepco v_max, |gain| × AO range); `max_magnet_voltage()` (also i_max × R) is the
+recommended one the GUI shows but does not enforce.
 
 **Data files.** `storage.raw_columns(monitors)`: point, time_s, cycle, V_programmed_V, I_set_A [X],
-[V_kepco_V, I_magnet_A [X]], signal_V [Y], then B_mT [X]/H_Oe [X] (calibration) and B_hall_mT [X]/H_hall_Oe [X]
+[V_kepco_V, I_magnet_A [X], R_magnet_ohm], signal_V [Y], then B_mT [X]/H_Oe [X] (calibration) and B_hall_mT [X]/H_hall_Oe [X]
 (Hall probe). The header (`# ` + YAML) has `columns:` (plain-English meaning of each column), the
 calibration used, sweep settings and a snapshot of the setup. `[X]`/`[Y]` tags mark axis candidates.
 Raw files are never processed; the averaged file and Analysis apply drift correction etc.

@@ -56,6 +56,7 @@ QLabel#statusPill {{ border-radius:12px; padding:4px 14px; font-weight:600; }}
 QLabel#statusPill[state="ok"] {{ background:{ok_bg}; color:{ok_fg}; }}
 QLabel#statusPill[state="warn"] {{ background:{warn_bg}; color:{warn_fg}; }}
 QLabel#statusPill[state="off"] {{ background:{off_bg}; color:{off_fg}; }}
+QLabel#statusPill[state="hot"] {{ background:{danger_soft}; color:{danger_hover}; }}
 
 QTabWidget::pane {{ border:none; background:{bg}; }}
 QTabBar {{ background:{header}; }}

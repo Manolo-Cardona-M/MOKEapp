@@ -77,7 +77,13 @@ class AppState(QObject):
 
     @property
     def max_voltage(self) -> float:
+        """Hard limit: the spin boxes stop here."""
         return self.inst.kepco.max_voltage
+
+    @property
+    def recommended_voltage(self) -> float:
+        """Current limit from Setup (i_max × R): shown, and warned about above it, but allowed."""
+        return self.inst.kepco.recommended_voltage
 
     @property
     def resistance(self) -> float:

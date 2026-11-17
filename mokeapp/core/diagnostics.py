@@ -12,6 +12,24 @@ MIN_TEST_CURRENT_A = 0.1
 R_RANGE = (0.5, 2.0)    # measured R must be within this factor of the configured R
 MIN_HALL_CHANGE_MT = 0.1   # the ±1 V test pulse must change the Hall reading at least this much
 MONITOR_READS = 3      # median of several captures: one bad USB-6002 capture must not fail the check
+# An iron-core magnet's current takes a while to reach V/R (L/R): read only once it stops changing, so the
+# cold R (the reference of the live heating indicator) is not overestimated.
+SETTLE_MIN_S = 0.15
+SETTLE_MAX_S = 3.0
+SETTLE_TOL = 0.003     # relative change in current between two reads 0.1 s apart
+
+
+def _settled_read(kepco) -> None:
+    """Wait until the magnet current stops changing (or SETTLE_MAX_S)."""
+    time.sleep(SETTLE_MIN_S)
+    t0 = time.monotonic()
+    _, last = kepco.read()
+    while time.monotonic() - t0 < SETTLE_MAX_S:
+        time.sleep(0.1)
+        _, i = kepco.read()
+        if abs(i - last) <= SETTLE_TOL * max(abs(i), 1e-3):
+            return
+        last = i
 # Near extinction (crossed polarizers) a few mV is a normal signal, so only ~0 V is suspicious.
 # The PDA36A dark level is a few mV to -20 mV depending on gain, so this can't prove the laser is off.
 DARK_SIGNAL_V = 0.002
@@ -88,7 +106,10 @@ def _kepco(inst) -> tuple[list[CheckResult], float | None]:
         kepco.read()    # throw-away capture: wakes the DAQ after idle time
         for v in (TEST_VOLTAGE, -TEST_VOLTAGE):
             kepco.set_voltage(v)
-            time.sleep(0.15)
+            if inst.monitors:
+                _settled_read(kepco)
+            else:
+                time.sleep(SETTLE_MIN_S)
             reads, h = [], []
             for _ in range(MONITOR_READS):
                 reads.append(kepco.read())

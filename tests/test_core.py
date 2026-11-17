@@ -535,3 +535,65 @@ def test_diagnostics_pass_and_detect_disconnection(sim):
     sim.sim_lab.magnet_connected = False
     rep = run_diagnostics(sim)
     assert not rep.passed
+
+
+# ------------------------------------------------------------------ magnet heating and voltage limits
+def test_magnet_heat_running_median_levels_and_low_current():
+    from mokeapp.core.heating import MagnetHeat
+    h = MagnetHeat(2.0, min_current_A=0.5, warm_frac=0.10, hot_frac=0.30, window=5)
+    assert h.add(0.2, 0.1).level == "none"                # too little current: no estimate yet
+    for _ in range(4):
+        h.add(2.0, 1.0)
+    st = h.add(-3.0, -1.0)                                 # one bad capture (R = 3 Ω) is out-voted
+    assert st.r_ohm == pytest.approx(2.0) and st.level == "ok"
+    for _ in range(5):
+        st = h.add(2.4, 1.0)                               # +20 %: amber
+    assert st.level == "warm" and st.delta_c == pytest.approx(0.2 / 0.00393)
+    for _ in range(5):
+        st = h.add(2.8, 1.0)                               # +40 %: red
+    assert st.level == "hot" and st.peak_rise == pytest.approx(0.4)
+
+
+def _hot_run(sim, tmp_path, stop: bool):
+    sim.cfg.safety.stop_on_overheat = stop
+    sim.sim_lab.resistance_ohm = 1.4 * sim.cfg.kepco.magnet_resistance_ohm    # coil 40 % above its cold R
+    shown = []
+    points = []
+    runner = SweepRunner(sim, SweepSettings("triangle", 6.0, 40, 0, cycles=1, folder=tmp_path, sample="hot"),
+                         on_point=points.append, on_warning=shown.append)
+    return runner.run(), points, shown
+
+
+def test_hot_magnet_keeps_running_when_stop_is_off(sim, tmp_path):
+    res, points, shown = _hot_run(sim, tmp_path, stop=False)
+    assert not res.error and res.completed_cycles == 1
+    assert points[-1].heat.level == "hot" and points[-1].heat.rise == pytest.approx(0.4, rel=0.05)
+    assert any("heating up" in w for w in res.warnings)    # logged and kept in the result...
+    assert not any("heating up" in w for w in shown)       # ...but no message in the tab: the indicator shows it
+    m = storage.load_measurement(res.raw_path)
+    r = m.column(storage.COL_RMAGNET)
+    assert np.nanmedian(r) == pytest.approx(1.4 * 2.19, rel=0.02)
+    assert sim.sim_lab.ao == 0
+
+
+def test_hot_magnet_stops_the_run_when_stop_is_on(sim, tmp_path):
+    res, _, _ = _hot_run(sim, tmp_path, stop=True)
+    assert "overheating" in res.error
+    assert sim.sim_lab.ao == 0
+
+
+def test_stop_on_overheat_round_trips_in_the_setup(cfg, tmp_path):
+    from mokeapp.config import save_config
+    cfg.safety.stop_on_overheat = False
+    p = save_config(cfg, tmp_path / "s.yaml")
+    assert load_config(p).safety.stop_on_overheat is False
+
+
+def test_current_limit_is_recommended_not_enforced(sim):
+    cfg = sim.cfg
+    assert sim.kepco.recommended_voltage == pytest.approx(cfg.kepco.i_max * 2.19)
+    assert sim.kepco.max_voltage == pytest.approx(min(cfg.kepco.v_max, abs(cfg.kepco.gain) * 10))
+    amp = sim.kepco.recommended_voltage + 5            # above the recommended maximum, within the hardware
+    res = SweepRunner(sim, SweepSettings("triangle", amp, 20, 0, cycles=1)).run()
+    assert not res.error
+    assert np.abs(res.measurement.column(storage.COL_VPROG)).max() == pytest.approx(amp)

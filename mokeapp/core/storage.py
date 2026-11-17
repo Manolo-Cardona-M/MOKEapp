@@ -27,14 +27,15 @@ COL_FIELD = "B_mT" + X_TAG
 COL_FIELD_OE = "H_Oe" + X_TAG    # same field in oersted: 10 × B_mT
 COL_HALL = "B_hall_mT" + X_TAG     # field measured live by a Hall probe on the DAQ (when one is wired)
 COL_HALL_OE = "H_hall_Oe" + X_TAG
+COL_RMAGNET = "R_magnet_ohm"       # V/I at the Kepco monitors: follows the coil temperature
 FIELD_COLUMNS = (COL_FIELD, COL_FIELD_OE, COL_HALL, COL_HALL_OE)
 
 MONITOR_COLUMNS = [COL_VKEPCO, COL_CURRENT]   # only when the Kepco monitors are wired
 
 
 def raw_columns(monitors: bool = True) -> list[str]:
-    return [COL_POINT, COL_TIME, COL_CYCLE, COL_VPROG, COL_ISET] + (MONITOR_COLUMNS if monitors else []) \
-        + [COL_SIGNAL]
+    return [COL_POINT, COL_TIME, COL_CYCLE, COL_VPROG, COL_ISET] \
+        + (MONITOR_COLUMNS + [COL_RMAGNET] if monitors else []) + [COL_SIGNAL]
 
 
 def avg_columns(monitors: bool = True) -> list[str]:
@@ -54,6 +55,8 @@ _DESCRIPTIONS = {
     COL_ISET: "X AXIS (raw): programmed magnet current, V_programmed / nominal magnet R "
               "(kepco.magnet_resistance_ohm in the setup), A.",
     COL_SIGNAL: "Y AXIS: photodetector voltage read by the Keithley 2000 (V), i.e. the Kerr signal.",
+    COL_RMAGNET: "Magnet resistance V_kepco / I_magnet at this point (ohm), empty below 0.05 A. Copper rises "
+                 "~0.39 % per degC, so it tracks the coil temperature (single points include L*dI/dt).",
 }
 
 

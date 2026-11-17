@@ -18,8 +18,9 @@ loops. It works with any longitudinal or polar setup built this way.
   points, settle time and cycles, and can average cycles. The magnet always goes back to 0 V.
 - **Checks the hardware before measuring.** The diagnostics test the multimeter, the DAQ, the supply
   and magnet (gain, current, resistance) and the light on the photodetector.
-- **Has safety built in.** Slew-limited ramps, voltage and current limits, a magnet-current watchdog and
-  overheating detection.
+- **Has safety built in.** Slew-limited ramps, the supply's voltage limit, a magnet-current watchdog and a
+  live magnet temperature indicator (from its resistance). The Setup's max current is a recommendation
+  you can go above, and stopping a run on overheating is optional.
 - **Calibrates the field.** You type Hall-probe points, fit them (linear or polynomial) and save one
   file per calibration. The X axis can then be current, mT or Oe.
 - **Analyses on demand.** Coercive field (Hc⁺, Hc⁻, shift), Mr/Ms, drift correction (simple or robust),
@@ -93,7 +94,7 @@ GPIB adapter can fall asleep and return wrong readings or disconnect.
   `..._average.csv` the averaged loop. The `#` header lines are YAML: what each column means, the sweep
   settings, the calibration used and the instrument setup. Columns tagged `[X]` are field-axis
   candidates: `I_set_A` (programmed current), `I_magnet_A` (measured, with monitors), `B_mT`, `H_Oe`.
-  `signal_V [Y]` is the Kerr signal.
+  `signal_V [Y]` is the Kerr signal. With monitors, `R_magnet_ohm` (V/I) follows the coil temperature.
 - **Setups:** `config/<name>.yaml`, one per MOKE, written by the Setup dialog.
   `config/example_setup.yaml` is a commented example.
 - **Calibrations:** `calibrations/<coil>_<date>.yaml`, one file per calibration; `active.yaml` is the

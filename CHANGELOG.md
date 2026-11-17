@@ -2,6 +2,22 @@
 
 All notable changes to MOKEapp. Dates are when the version was handed to the lab.
 
+## 0.2.6 — 2026-11-17
+- **Live magnet temperature indicator** in Continuous and Hysteresis, next to Start/Stop: the magnet
+  resistance V/I from the Kepco monitors (running median of the points with enough current), its rise
+  over the cold R from the diagnostics and the estimated temperature rise (copper, +0.39 %/°C), with the
+  run's maximum. Green, amber above `resistance_warn_frac`, red above `resistance_stop_frac`. The heating
+  no longer pops up in the warnings box; it is logged and kept in the run's result.
+- **Stopping on overheating is optional:** new setting `safety.stop_on_overheat` ("Stop the run if the
+  magnet overheats" in Setup, on by default; off in P-MOKE).
+- **The Setup's max current is a recommendation, not a limit:** the amplitude and manual-control boxes
+  show "rec. max" (i_max × R) and allow going above it, up to what the Kepco (v_max) and the DAQ
+  (|gain| × AO range) can deliver. Above it the current line says so and the run logs it.
+- Raw files with monitors have a new column `R_magnet_ohm` (V/I at each point).
+- Diagnostics wait for the magnet current to settle before measuring R (iron-core magnets: L/R), so the
+  cold R is no longer overestimated (P-MOKE's new magnet read 1.35 Ω instead of 1.27 Ω).
+- A hot magnet no longer triggers monitor re-reads at every point.
+
 ## 0.2.5 — 2026-11-03
 - **Fix (install):** MOKEapp needs Python 3.14, not "3.12+": on 3.12 it fails at import
   (`threading.Lock | None` in `gui/state.py`). README and `install/setup_pc.ps1` now ask for 3.14,
