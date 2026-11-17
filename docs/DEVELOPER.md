@@ -71,7 +71,7 @@ back through Qt signals; the plots redraw at most every 50 ms.
 **Safety layers.** AO clamp to the device range; magnet voltage clamp to min(v_max, i_max·R, |gain|·AO);
 slew-rate ramp on every change; ramp to 0 on stop, error, close, `atexit` and the excepthook; with
 monitors: current-mismatch watchdog (re-measured twice before stopping, because the USB-6002 sometimes
-returns one bad capture), magnet heating (`core/heating.py`: running median of V/I, shown live; stops the run
+returns one bad capture), magnet heating (`core/heating.py`: trimmed mean of V/I over one cycle, shown live; stops the run
 only with `safety.stop_on_overheat`), current above the recommended `i_max` (logged). The hard voltage limit
 is `cfg.hard_magnet_voltage()` (Kepco v_max, |gain| × AO range); `max_magnet_voltage()` (also i_max × R) is the
 recommended one the GUI shows but does not enforce.

@@ -538,20 +538,30 @@ def test_diagnostics_pass_and_detect_disconnection(sim):
 
 
 # ------------------------------------------------------------------ magnet heating and voltage limits
-def test_magnet_heat_running_median_levels_and_low_current():
+def test_magnet_heat_estimate_levels_and_low_current():
     from mokeapp.core.heating import MagnetHeat
-    h = MagnetHeat(2.0, min_current_A=0.5, warm_frac=0.10, hot_frac=0.30, window=5)
+    h = MagnetHeat(2.0, min_current_A=0.5, warm_frac=0.10, hot_frac=0.30, window=15)
     assert h.add(0.2, 0.1).level == "none"                # too little current: no estimate yet
-    for _ in range(4):
+    for _ in range(14):
         h.add(2.0, 1.0)
-    st = h.add(-3.0, -1.0)                                 # one bad capture (R = 3 Ω) is out-voted
+    st = h.add(-6.0, -1.0)                                 # one bad capture (R = 6 Ω) is trimmed away
     assert st.r_ohm == pytest.approx(2.0) and st.level == "ok"
-    for _ in range(5):
+    for _ in range(15):
         st = h.add(2.4, 1.0)                               # +20 %: amber
     assert st.level == "warm" and st.delta_c == pytest.approx(0.2 / 0.00393)
-    for _ in range(5):
+    for _ in range(15):
         st = h.add(2.8, 1.0)                               # +40 %: red
     assert st.level == "hot" and st.peak_rise == pytest.approx(0.4)
+
+
+def test_magnet_heat_cancels_the_inductive_bias_of_a_sweep():
+    # measured on P-MOKE at 0.5 V, 30 ms settle: V/I 1.294 Ω while |I| rises, 1.235 Ω while it falls
+    from mokeapp.core.heating import MagnetHeat
+    h = MagnetHeat(1.265, min_current_A=0.1, warm_frac=0.10, hot_frac=0.30, window=40)
+    for k in range(200):
+        st = h.add(1.294 if (k // 10) % 2 == 0 else 1.235, 1.0)   # 10 points up, 10 down, ...
+    assert st.r_ohm == pytest.approx((1.294 + 1.235) / 2, rel=0.005)
+    assert abs(st.rise) < 0.01
 
 
 def _hot_run(sim, tmp_path, stop: bool):

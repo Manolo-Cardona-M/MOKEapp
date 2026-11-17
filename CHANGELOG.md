@@ -4,7 +4,8 @@ All notable changes to MOKEapp. Dates are when the version was handed to the lab
 
 ## 0.2.6 — 2026-11-17
 - **Live magnet temperature indicator** in Continuous and Hysteresis, next to Start/Stop: the magnet
-  resistance V/I from the Kepco monitors (running median of the points with enough current), its rise
+  resistance V/I from the Kepco monitors (trimmed mean over one cycle of the points with enough current,
+  so the coil's inductive lag, +2 % while |I| rises and -2 % while it falls, cancels), its rise
   over the cold R from the diagnostics and the estimated temperature rise (copper, +0.39 %/°C), with the
   run's maximum. Green, amber above `resistance_warn_frac`, red above `resistance_stop_frac`. The heating
   no longer pops up in the warnings box; it is logged and kept in the run's result.

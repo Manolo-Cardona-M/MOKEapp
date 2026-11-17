@@ -136,8 +136,9 @@ class SweepRunner:
         sc = self.cfg.safety
         r_cold = self.inst.kepco.resistance_ohm
         peak_A = abs(amplitude_V) / r_cold
+        # one cycle's worth of points, so the inductive bias of rising and falling currents cancels
         return MagnetHeat(r_cold, max(sc.min_current_for_checks_A, MIN_CURRENT_FRACTION * peak_A),
-                          sc.resistance_warn_frac, sc.resistance_stop_frac)
+                          sc.resistance_warn_frac, sc.resistance_stop_frac, window=self.s.points_per_cycle)
 
     def _monitor_problem(self, v_set: float, v_meas: float, i_meas: float) -> str:
         """'' if the Kepco monitors agree with the setpoint, else the reason (open magnet, Kepco off...)."""
