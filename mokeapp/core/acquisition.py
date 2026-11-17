@@ -18,7 +18,7 @@ from mokeapp.core import storage
 from mokeapp.core.calibration import MT_TO_OE
 from mokeapp.core.heating import MIN_CURRENT_FRACTION, MIN_WINDOW, HeatState, MagnetHeat
 from mokeapp.core.processing import average_cycles, correct_drift, drift_fit_plateaus
-from mokeapp.core.waveforms import make_waveform
+from mokeapp.core.waveforms import Interval, make_interval_cycle, make_waveform
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +42,10 @@ class SweepSettings:
     drift_correction: str = "off"   # processing.DRIFT_METHODS: off | endpoints | plateaus
     sample: str = ""
     folder: Path | None = None      # None = do not save
+    # variable intervals (Hysteresis): in magnet volts; they replace waveform/amplitude/points/settle.
+    # interval_rows: the same table as the user typed it (their X unit), for the CSV header.
+    intervals: list[Interval] | None = None
+    interval_rows: list[dict] | None = None
 
 
 @dataclass
@@ -117,6 +121,7 @@ class SweepRunner:
         self.drift_method = "endpoints" if dc is True else ("off" if dc is False else dc)
         self._warned: set[str] = set()
         self.heat: MagnetHeat | None = None     # created in run(), when the amplitude and cold R are known
+        self._points_per_cycle = settings.points_per_cycle
 
     def stop(self) -> None:
         self.stop_event.set()
@@ -139,7 +144,7 @@ class SweepRunner:
         # one cycle's worth of points, so the inductive bias of rising and falling currents cancels
         return MagnetHeat(r_cold, max(sc.min_current_for_checks_A, MIN_CURRENT_FRACTION * peak_A),
                           sc.resistance_warn_frac, sc.resistance_stop_frac,
-                          window=max(MIN_WINDOW, self.s.points_per_cycle))
+                          window=max(MIN_WINDOW, self._points_per_cycle))
 
     def _monitor_problem(self, v_set: float, v_meas: float, i_meas: float) -> str:
         """'' if the Kepco monitors agree with the setpoint, else the reason (open magnet, Kepco off...)."""
@@ -240,10 +245,12 @@ class SweepRunner:
             "calibration": cal.header() if cal else "none (field calibration not active: X is current only)",
             **({"hall_probe": {"channel": self.cfg.daq.ai_hall, "mT_per_V": self.cfg.daq.hall_mT_per_V,
                                "offset_mT": self.cfg.daq.hall_offset_mT}} if self.hall else {}),
-            "waveform": s.waveform,
+            **({"waveform": "triangle (variable intervals)", "intervals": s.interval_rows or [
+                {"from_V": i.x_from, "to_V": i.x_to, "points": i.points, "settle_ms": i.settle_ms}
+                for i in s.intervals]}
+               if s.intervals else {"waveform": s.waveform, "settle_ms": s.settle_ms}),
             "amplitude_V": s.amplitude_V,
-            "points_per_cycle": s.points_per_cycle,
-            "settle_ms": s.settle_ms,
+            "points_per_cycle": self._points_per_cycle,
             "cycles": s.cycles,
             "averaged": s.average,
             "drift_correction": self.drift_method,     # applied to the averaged file only; raw is untouched
@@ -257,9 +264,14 @@ class SweepRunner:
         s = self.s
         cal = self.cal
         kepco, keithley, daq = self.inst.kepco, self.inst.keithley, self.inst.daq
-        wave = make_waveform(s.waveform, kepco.clamp(s.amplitude_V), s.points_per_cycle)
-        self.heat = self._new_heat(kepco.clamp(s.amplitude_V)) if self.monitors else None
-        settle = s.settle_ms / 1000.0
+        if s.intervals:
+            wave, settles = make_interval_cycle(s.intervals)
+            wave = np.array([kepco.clamp(v) for v in wave])
+        else:
+            wave = make_waveform(s.waveform, kepco.clamp(s.amplitude_V), s.points_per_cycle)
+            settles = np.full(len(wave), s.settle_ms / 1000.0)
+        self._points_per_cycle = len(wave)
+        self.heat = self._new_heat(float(np.max(np.abs(wave)))) if self.monitors else None
         started = datetime.now()
         raw_writer = None
         field_columns = ([storage.COL_FIELD, storage.COL_FIELD_OE] if cal else []) + \
@@ -277,7 +289,7 @@ class SweepRunner:
             if capture:
                 daq.read_monitors()         # throw-away capture: wakes the DAQ after idle time
             kepco.set_voltage(wave[0])
-            time.sleep(max(settle, 0.2))
+            time.sleep(max(settles[0], 0.2))
             t0 = time.monotonic()
             cycle = 0
             while not self.stop_event.is_set() and (s.cycles is None or cycle < s.cycles):
@@ -286,8 +298,8 @@ class SweepRunner:
                     if self.stop_event.is_set():
                         break
                     v_set = kepco.set_voltage(v)
-                    if settle:
-                        time.sleep(settle)
+                    if settles[k]:
+                        time.sleep(settles[k])
                     if capture:
                         daq.start_capture()
                     signal = keithley.read()

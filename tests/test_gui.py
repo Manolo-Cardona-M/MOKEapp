@@ -495,3 +495,44 @@ def test_manual_control_shows_the_magnet_temperature(window, monkeypatch):
     ins.do_set()
     ins._show_poll(((5.0, 5.0 / (1.4 * r0)), None, None, None))
     assert win.state.inst.kepco.output_V == 0 and shown == ["Magnet overheating"]
+
+
+def test_variable_intervals_panel(window, tmp_path):
+    from mokeapp.core.waveforms import Interval
+    app, win = window
+    ins, hyst = win.instruments, win.hysteresis
+    iv = hyst.intervals
+    assert not iv.active and not iv.body.isVisible()
+    ins.do_connect()
+    wait_until(app, lambda: not win.state.busy)
+    ins.do_diagnostics()
+    wait_until(app, lambda: win.state.diagnostics is not None and not win.state.busy)
+
+    hyst.params.amplitude.setValue(3.0)
+    iv.toggle.setChecked(True)                                 # unfolds with the preset from the amplitude
+    assert iv.table.rowCount() == 3 and not hyst.params.points.isEnabled()
+    assert hyst.params.points.value() == 2 * (10 + 59 + 9) - 2
+    assert iv.table.horizontalHeaderItem(0).text() == "From (A)"
+    assert iv.intervals()[0].x_from == pytest.approx(-3.0)     # stored in magnet volts...
+    r = win.state.cfg.kepco.magnet_resistance_ohm
+    assert float(iv.table.item(0, 0).text()) == pytest.approx(-3.0 / r, abs=1e-3)   # ...shown in A
+
+    iv.set_cell(1, 0, float(iv.table.item(1, 0).text()) + 0.2)                   # gap: Start blocked
+    assert "must start where" in iv.error and not hyst.start_btn.isEnabled()
+    assert "Variable intervals" in hyst.progress.text()
+
+    iv.set_intervals([Interval(-2.0, -1.0, 3, 0), Interval(-1.0, 1.0, 9, 0), Interval(1.0, 2.0, 3, 0)])
+    assert not iv.error and hyst.start_btn.isEnabled()
+    hyst.cycles.setValue(1)
+    hyst.save.setChecked(True)
+    hyst.save.sample.setText("intervals")
+    hyst.start()
+    wait_until(app, lambda: hyst.thread is None)
+    assert "Finished: 1 complete" in hyst.progress.text()
+    raw = next(tmp_path.glob("*_raw.csv"))
+    m = storage.load_measurement(raw)
+    assert len(m.column(storage.COL_VPROG)) == 2 * 13 - 2
+    assert m.metadata["intervals"][1]["unit"] == "A" and m.metadata["intervals"][1]["points"] == 9
+
+    iv.toggle.setChecked(False)                                # back to the plain sweep
+    assert hyst.params.points.isEnabled() and hyst.settings().intervals is None

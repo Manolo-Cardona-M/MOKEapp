@@ -79,6 +79,9 @@ GPIB adapter can fall asleep and return wrong readings or disconnect.
 5. **Hysteresis:**
    - set the amplitude (soft films: ±0.5–1 V at the magnet is usually enough), points, settle time and
      cycles;
+   - or open **Variable intervals** to split the X axis into stretches, each with its own points and settle
+     time (e.g. coarse and fast in the saturations, fine and slow around the switching). Limits are in
+     the X axis unit (A, or mT / Oe with a field calibration);
    - choose *Average* and the *Drift* correction;
    - tick **Save data** with a sample name if you want the files.
 

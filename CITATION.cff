@@ -27,7 +27,7 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.23890038
     description: "Version 0.2.3"
-version: 0.2.6
+version: 0.2.7
 date-released: 2026-11-17
 license: MIT
 keywords:

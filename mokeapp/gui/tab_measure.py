@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QCheckBox, QDoubleSpinBox, QFileDialog, QFormLayo
 from mokeapp.core.acquisition import SweepSettings
 from mokeapp.core.processing import stability_report
 from mokeapp.gui import theme
+from mokeapp.gui.intervals import IntervalPanel
 from mokeapp.gui.state import SweepThread
 from mokeapp.gui.widgets import (AutoScale, DriftCombo, MagnetHeatPill, SweepParams, XAxisToggle, make_plot, to_x,
                                  x_label)
@@ -448,9 +449,13 @@ class HysteresisTab(MeasureTab):
         h.addWidget(self.average)
         f.addRow("Cycles", h)
         f.addRow("Drift", self.drift)
+        self.intervals = IntervalPanel(state)
+        self.intervals.params = self.params
+        self.params.cycle_override = self.intervals.cycle
+        self.intervals.changed.connect(self._intervals_changed)
 
         root = QHBoxLayout(self)
-        root.addWidget(self.controls_box(box))
+        root.addWidget(self.controls_box(self.intervals, box))
         self.cycle_plot = make_plot("Current cycle", "", "Signal (V)")
         self.avg_plot = make_plot("Average", "", "Signal (V)")
         self.xaxis = XAxisToggle(state)
@@ -467,7 +472,31 @@ class HysteresisTab(MeasureTab):
         state.x_mode_changed.connect(lambda _: self._x_mode_changed())
         state.calibration_changed.connect(self._x_mode_changed)
         self._set_x_labels()
+        self._intervals_changed()
+
+    def _intervals_changed(self):
+        """With variable intervals the table defines the sweep: waveform, amplitude, points and settle show
+        what it gives and cannot be edited."""
+        on = self.intervals.active
+        p = self.params
+        for w in (p.waveform, p.amplitude, p.points, p.settle):
+            w.setEnabled(not on)
+        cycle = self.intervals.cycle()
+        if cycle is not None:
+            volts, _ = cycle
+            p.waveform.setCurrentText("triangle")
+            p.amplitude.setValue(float(max(abs(volts))))
+            p.points.setValue(len(volts))
+        self.intervals._update_summary()
+        p._update_labels()
         self.refresh()
+
+    def refresh(self):
+        super().refresh()
+        intervals = getattr(self, "intervals", None)
+        if intervals is not None and intervals.active and intervals.error and self.thread is None:
+            self.start_btn.setEnabled(False)
+            self.progress.setText(f"Variable intervals: {intervals.error}")
 
     @staticmethod
     def _empty() -> dict:
@@ -509,9 +538,12 @@ class HysteresisTab(MeasureTab):
 
     def settings(self):
         sample, folder = self.save.target()
+        on = self.intervals.cycle() is not None
         return SweepSettings(**self.params.values(), cycles=self.cycles.value(),
                              average=self.average.isChecked(), drift_correction=self.drift.method,
-                             sample=sample, folder=folder)
+                             sample=sample, folder=folder,
+                             intervals=self.intervals.intervals() if on else None,
+                             interval_rows=self.intervals.rows() if on else None)
 
     def on_start(self, s):
         self.n_cycles = s.cycles

@@ -298,6 +298,7 @@ class SweepParams(QGroupBox):
 
         self.time_label = QLabel()
         form.addRow("Time per cycle", self.time_label)
+        self.cycle_override = None      # () -> (volts, settle s) of one cycle, or None for the plain sweep
 
         self.update_limits()
         self.amplitude.setValue(min(d.amplitude_V, state.recommended_voltage))
@@ -342,6 +343,10 @@ class SweepParams(QGroupBox):
         return READ_OVERHEAD_S + max(0.0, getattr(self.state.inst.keithley, "read_time_s", 0.0) - FAST_READ_S)
 
     def cycle_time_s(self) -> float:
+        cycle = self.cycle_override() if self.cycle_override else None    # variable intervals (Hysteresis)
+        if cycle is not None:
+            volts, settles = cycle
+            return float(settles.sum()) + len(volts) * self.read_time_s()
         return self.points.value() * (self.settle.value() / 1000 + self.read_time_s())
 
     def values(self) -> dict:

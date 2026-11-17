@@ -607,3 +607,59 @@ def test_current_limit_is_recommended_not_enforced(sim):
     res = SweepRunner(sim, SweepSettings("triangle", amp, 20, 0, cycles=1)).run()
     assert not res.error
     assert np.abs(res.measurement.column(storage.COL_VPROG)).max() == pytest.approx(amp)
+
+
+# ------------------------------------------------------------------ variable intervals
+def _ivs():
+    from mokeapp.core.waveforms import Interval
+    return [Interval(-3.0, -1.0, 3, 10), Interval(-1.0, 1.0, 5, 40), Interval(1.0, 3.0, 3, 10)]
+
+
+def test_interval_cycle_grid_and_settle():
+    from mokeapp.core.waveforms import make_interval_cycle
+    v, st = make_interval_cycle(_ivs())
+    up = [-3, -2, -1, -0.5, 0, 0.5, 1, 2, 3]                 # shared boundaries appear once
+    assert list(v[:9]) == pytest.approx(up)
+    assert list(v[9:]) == pytest.approx(up[-2:0:-1])         # back down through the same points, ends above -3
+    assert len(v) == 2 * len(up) - 2
+    assert list(st[:9] * 1000) == pytest.approx([10, 10, 40, 40, 40, 40, 40, 10, 10])   # borders: slower
+    assert list(st[9:]) == pytest.approx(list(st[1:8][::-1]))
+
+
+@pytest.mark.parametrize("bad, msg", [
+    ([], "at least one"),
+    ([(-1, 1, 1, 10)], "2 points"),
+    ([(1, -1, 5, 10)], "larger than"),
+    ([(-2, 0, 5, 10), (0.5, 2, 5, 10)], "must start where"),
+    ([(-1, 1, 5, -1)], "negative"),
+    ([(-30, 30, 5, 10)], "beyond"),
+])
+def test_interval_validation(bad, msg):
+    from mokeapp.core.waveforms import Interval, validate_intervals
+    assert msg in validate_intervals([Interval(*b) for b in bad], max_volts=20)
+
+
+def test_interval_run_uses_per_point_settle_and_writes_the_table(sim, tmp_path):
+    from mokeapp.core.waveforms import Interval
+    ivs = [Interval(-2.0, -1.0, 3, 0), Interval(-1.0, 1.0, 9, 60), Interval(1.0, 2.0, 3, 0)]
+    rows = [{"from": -1.5, "to": -0.75, "unit": "A", "points": 3, "settle_ms": 0}]
+    res = SweepRunner(sim, SweepSettings(cycles=2, intervals=ivs, interval_rows=rows, amplitude_V=2.0,
+                                         folder=tmp_path, sample="iv")).run()
+    assert not res.error and res.completed_cycles == 2 and sim.sim_lab.ao == 0
+    m = storage.load_measurement(res.raw_path)
+    v, t, c = m.column(storage.COL_VPROG), m.column(storage.COL_TIME), m.column(storage.COL_CYCLE)
+    n = 2 * (3 + 8 + 2) - 2
+    assert len(v) == 2 * n and np.all(c[:n] == 0)
+    dt = np.diff(t[:n])
+    fine = np.abs(v[1:n]) <= 1 + 1e-9                         # points read after a 60 ms settle
+    assert dt[fine].min() > 0.055 and dt[~fine].max() < 0.05
+    assert m.metadata["intervals"] == rows and "variable intervals" in m.metadata["waveform"]
+    avg = storage.load_measurement(res.average_path)
+    assert len(avg.column(storage.COL_SIGNAL)) == n           # cycles share the grid: averaging works
+
+
+def test_calibration_current_for_inverts_the_fit():
+    cal = calibration.fit("C", [-2, -1, 0, 1, 2], [-100, -50, 0, 50, 100])
+    assert cal.current_for(75.0) == pytest.approx(1.5, abs=1e-3)
+    with pytest.raises(calibration.CalibrationError):
+        cal.current_for(500.0)

@@ -2,6 +2,20 @@
 
 All notable changes to MOKEapp. Dates are when the version was handed to the lab.
 
+## 0.2.7 — 2026-11-17
+- **Variable intervals** in Hysteresis: a "Variable intervals" button under Sweep unfolds a table of X
+  intervals (From, To, Points, Settle), so the saturations can be swept coarse and fast and the switching
+  fine and slow. Limits are typed in the X axis unit (A; mT / Oe through the field calibration, inverted
+  numerically with `CoilCalibration.current_for`) and kept in magnet volts; a "Fine around 0" preset fills
+  three intervals from the amplitude. The cycle goes up through the intervals and back down through the
+  same points (same grid every cycle, so averaging works); boundary points get the longer settle. The
+  table is remembered per PC and written to the CSV header (`intervals:`). Invalid tables block Start
+  with the reason.
+- The Instruments tab's manual control shows the live magnet temperature too (last value kept at 0 A).
+- Faster GUI: the magnet indicator restyles only when its color changes, and closing the window removes
+  its application-wide wheel filter (they piled up in the tests). Diagnostics' settle check has a 2 mA
+  floor, so a disconnected magnet is detected without waiting.
+
 ## 0.2.6 — 2026-11-17
 - **Live magnet temperature indicator** in Continuous and Hysteresis, next to Start/Stop: the magnet
   resistance V/I from the Kepco monitors (trimmed mean over one cycle of the points with enough current,

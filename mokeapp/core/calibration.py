@@ -65,6 +65,21 @@ class CoilCalibration:
         """mT per A at I = 0."""
         return self.coefficients[1]
 
+    def current_for(self, field_mT: float) -> float:
+        """Current (A) that gives this field: the fit inverted numerically over the calibrated range (where it
+        must be monotonic). Raises CalibrationError outside the fields that range covers."""
+        lo, hi = self.current_range
+        i = np.linspace(lo, hi, 2001)
+        b = np.asarray(self.field(i), dtype=float)
+        if not (np.all(np.diff(b) > 0) or np.all(np.diff(b) < 0)):
+            raise CalibrationError(f"Calibration '{self.coil}' is not monotonic over {lo:.3g}…{hi:.3g} A")
+        if b[0] > b[-1]:
+            i, b = i[::-1], b[::-1]
+        if not b[0] - 1e-9 <= field_mT <= b[-1] + 1e-9:
+            raise CalibrationError(f"{field_mT:.4g} mT is outside the calibrated fields "
+                                   f"({b[0]:.4g} to {b[-1]:.4g} mT)")
+        return float(np.interp(field_mT, b, i))
+
     def in_range(self, current: float) -> bool:
         lo, hi = self.current_range
         span = hi - lo

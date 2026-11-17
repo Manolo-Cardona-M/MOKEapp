@@ -15,7 +15,8 @@ mokeapp/
     diagnostics.py          preflight checks, adapted to the setup (monitors / Hall probe / multimeter model)
     processing.py           drift correction, averaging, normalisation, symmetrisation, Hc, stability report
     storage.py              CSV format (YAML '#' header + table), column names and descriptions
-    waveforms.py            triangle / sine / square, each cycle starting at -amplitude
+    waveforms.py            triangle / sine / square, each cycle starting at -amplitude; variable intervals
+                            (Interval, make_interval_cycle: per-point settle, same grid up and down)
   drivers/
     __init__.py             Instruments: the set of instruments of one setup (real or simulated), safe_zero
     multimeter.py           ScpiMultimeter + per-model command profiles (detect_profile from *IDN?)
