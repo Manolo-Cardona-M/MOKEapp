@@ -10,13 +10,15 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from mokeapp.core.diagnostics import run_diagnostics
+from mokeapp.core.heating import MagnetHeat
 from mokeapp.gui.setup_dialog import SetupDialog
 from mokeapp.gui.state import FuncThread
-from mokeapp.gui.widgets import COLORS, StatusLight
+from mokeapp.gui.widgets import COLORS, MagnetHeatPill, StatusLight
 
 log = logging.getLogger(__name__)
 
 RANGES = ["0.1", "1", "10", "100", "1000", "auto"]
+MANUAL_HEAT_WINDOW = 5     # live readout polls once a second: ~5 s average
 
 
 def instrument_labels(cfg) -> list[tuple[str, str]]:
@@ -153,6 +155,11 @@ class InstrumentsTab(QWidget):
         self.zero_btn = QPushButton("Zero")
         h.addWidget(self.zero_btn)
         f.addRow("", h)
+        self.heat = MagnetHeatPill()
+        self.heat.reset(state.inst.monitors, state.cfg.safety, state.resistance)
+        f.addRow(self.heat)
+        self._heat: MagnetHeat | None = None     # live estimate while the magnet carries a manual current
+        self._hot_stopped = False
         right.addWidget(box)
 
         # --- Keithley settings
@@ -290,6 +297,7 @@ class InstrumentsTab(QWidget):
             self.state.diagnostics = report
             if report.resistance_ohm:
                 self.state.set_resistance(report.resistance_ohm)
+            self._reset_heat()      # new cold reference
             self.table.setRowCount(len(report.checks))
             for row, c in enumerate(report.checks):
                 self.table.setItem(row, 0, QTableWidgetItem(c.name))
@@ -312,6 +320,31 @@ class InstrumentsTab(QWidget):
         self.timer.stop()
         self._run(lambda: run_diagnostics(self.state.inst), lambda r, e: (done(r, e), self.timer.start()),
                   "Running diagnostics (the magnet gets a ±1 V test pulse)...")
+
+    def _reset_heat(self):
+        self._heat = None
+        self._hot_stopped = False
+        self.heat.reset(self.state.inst.monitors, self.state.cfg.safety, self.state.resistance)
+
+    def _update_heat(self, v: float, i: float) -> None:
+        """Magnet temperature from the live readout (steady DC: a short window is enough)."""
+        s = self.state
+        sc = s.cfg.safety
+        if self._heat is None:
+            self._heat = MagnetHeat(s.resistance, sc.min_current_for_checks_A, sc.resistance_warn_frac,
+                                    sc.resistance_stop_frac, window=MANUAL_HEAT_WINDOW)
+        h = self._heat.add(v, i)
+        self.heat.update_heat(h, measuring=abs(i) >= sc.min_current_for_checks_A)
+        if h.level == "hot" and sc.stop_on_overheat and not self._hot_stopped and s.inst.kepco.output_V != 0:
+            self._hot_stopped = True
+            log.warning("Magnet overheating (%.0f %%, %.3f Ω): manual output set to 0 V", h.rise * 100, h.r_ohm)
+            self.do_zero()
+            QMessageBox.warning(self, "Magnet overheating",
+                                f"Magnet resistance rose {h.rise * 100:.0f} % (≈ +{h.delta_c:.0f} °C): the magnet was "
+                                "set to 0 V.\nTurn off 'Stop the run if the magnet overheats' in Setup to keep "
+                                "the indicator only.")
+        elif h.level != "hot":
+            self._hot_stopped = False
 
     def _override_toggled(self, on):
         if on:
@@ -417,6 +450,7 @@ class InstrumentsTab(QWidget):
             self.live_v.setText(f"{v:+8.3f} V")
             self.live_i.setText(f"{i:+8.3f} A")
             self.live_r.setText(f"{v / i:8.3f} Ω" if abs(i) > 0.1 else "-")
+            self._update_heat(v, i)
         elif inst.daq.connected:    # no monitors: show what is programmed
             v = inst.kepco.output_V
             self.live_v.setText(f"{v:+8.3f} V (set)")

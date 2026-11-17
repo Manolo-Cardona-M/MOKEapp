@@ -51,15 +51,18 @@ class MagnetHeatPill(QLabel):
                             f"+{safety.resistance_warn_frac * 100:.0f} %, red above "
                             f"+{safety.resistance_stop_frac * 100:.0f} %; {stop}.")
 
-    def update_heat(self, h) -> None:
+    def update_heat(self, h, measuring: bool = True) -> None:
+        """measuring=False: no current now, so R cannot be read; the last estimate stays, marked as such."""
         if h is None or h.level == "none":
             return
         self._show(self.STATES[h.level],
                    f"Magnet {h.r_ohm:.3f} Ω · {h.rise * 100:+.1f} % ≈ {h.delta_c:+.0f} °C   "
-                   f"(max {h.peak_rise * 100:+.1f} %)")
+                   f"(max {h.peak_rise * 100:+.1f} %)" + ("" if measuring else "   · last value, no current now"))
 
     def _show(self, state: str, text: str) -> None:
         self.setText(f"●  {text}")
+        if self.property("state") == state:     # called at every point: restyle only when the color changes
+            return
         self.setProperty("state", state)
         self.style().unpolish(self)
         self.style().polish(self)

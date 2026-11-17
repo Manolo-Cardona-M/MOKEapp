@@ -156,6 +156,8 @@ class MainWindow(QMainWindow):
                 return
         for tab in (self.continuous, self.hysteresis, self.instruments, self.calibration):
             tab.shutdown()
+        # the wheel guard filters every event of the whole application: don't leave it behind
+        QApplication.instance().removeEventFilter(self._wheel_guard)
         self.state.inst.close()
         log.info("Application closed, magnet at 0 V")
         event.accept()

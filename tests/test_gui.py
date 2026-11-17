@@ -466,3 +466,32 @@ def test_magnet_indicator_and_amplitude_above_the_recommended_max(window):
     assert "Finished: 1 complete" in hyst.progress.text()
     assert hyst.heat.property("state") == "hot" and "°C" in hyst.heat.text()
     assert not hyst.warnings.isVisible()                   # no message box text for the heating
+
+
+def test_manual_control_shows_the_magnet_temperature(window, monkeypatch):
+    app, win = window
+    ins = win.instruments
+    ins.do_connect()
+    wait_until(app, lambda: not win.state.busy)
+    ins.do_diagnostics()
+    wait_until(app, lambda: win.state.diagnostics is not None and not win.state.busy)
+    r0 = win.state.resistance
+    win.state.cfg.safety.stop_on_overheat = False
+    ins.manual_v.setValue(5.0)
+    ins.do_set()
+    for _ in range(5):                                  # what the live readout polls would deliver
+        ins._show_poll(((5.0, 5.0 / (1.2 * r0)), None, None, None))
+    assert ins.heat.property("state") == "warn" and "+20.0 %" in ins.heat.text()
+    for _ in range(5):
+        ins._show_poll(((5.0, 5.0 / (1.4 * r0)), None, None, None))
+    assert ins.heat.property("state") == "hot"
+    assert win.state.inst.kepco.output_V == pytest.approx(5.0)      # indicator only: the magnet stays on
+    ins._show_poll(((0.0, 0.0), None, None, None))                 # no current: last value kept, marked
+    assert "last value" in ins.heat.text()
+
+    shown = []
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda *a, **k: shown.append(a[1])))
+    win.state.cfg.safety.stop_on_overheat = True
+    ins.do_set()
+    ins._show_poll(((5.0, 5.0 / (1.4 * r0)), None, None, None))
+    assert win.state.inst.kepco.output_V == 0 and shown == ["Magnet overheating"]

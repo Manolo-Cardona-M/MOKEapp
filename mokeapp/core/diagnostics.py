@@ -16,7 +16,8 @@ MONITOR_READS = 3      # median of several captures: one bad USB-6002 capture mu
 # cold R (the reference of the live heating indicator) is not overestimated.
 SETTLE_MIN_S = 0.15
 SETTLE_MAX_S = 3.0
-SETTLE_TOL = 0.003     # relative change in current between two reads 0.1 s apart
+SETTLE_TOL = 0.003     # relative change in current between two reads 0.1 s apart...
+SETTLE_TOL_A = 0.002   # ...or this, so monitor noise at ~0 A (magnet disconnected) still settles
 
 
 def _settled_read(kepco) -> None:
@@ -27,7 +28,7 @@ def _settled_read(kepco) -> None:
     while time.monotonic() - t0 < SETTLE_MAX_S:
         time.sleep(0.1)
         _, i = kepco.read()
-        if abs(i - last) <= SETTLE_TOL * max(abs(i), 1e-3):
+        if abs(i - last) <= max(SETTLE_TOL * abs(i), SETTLE_TOL_A):
             return
         last = i
 # Near extinction (crossed polarizers) a few mV is a normal signal, so only ~0 V is suspicious.

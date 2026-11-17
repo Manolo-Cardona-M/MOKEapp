@@ -16,7 +16,7 @@ import numpy as np
 import mokeapp
 from mokeapp.core import storage
 from mokeapp.core.calibration import MT_TO_OE
-from mokeapp.core.heating import MIN_CURRENT_FRACTION, HeatState, MagnetHeat
+from mokeapp.core.heating import MIN_CURRENT_FRACTION, MIN_WINDOW, HeatState, MagnetHeat
 from mokeapp.core.processing import average_cycles, correct_drift, drift_fit_plateaus
 from mokeapp.core.waveforms import make_waveform
 
@@ -138,7 +138,8 @@ class SweepRunner:
         peak_A = abs(amplitude_V) / r_cold
         # one cycle's worth of points, so the inductive bias of rising and falling currents cancels
         return MagnetHeat(r_cold, max(sc.min_current_for_checks_A, MIN_CURRENT_FRACTION * peak_A),
-                          sc.resistance_warn_frac, sc.resistance_stop_frac, window=self.s.points_per_cycle)
+                          sc.resistance_warn_frac, sc.resistance_stop_frac,
+                          window=max(MIN_WINDOW, self.s.points_per_cycle))
 
     def _monitor_problem(self, v_set: float, v_meas: float, i_meas: float) -> str:
         """'' if the Kepco monitors agree with the setpoint, else the reason (open magnet, Kepco off...)."""
