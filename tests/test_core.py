@@ -1,6 +1,7 @@
 from dataclasses import asdict
 from pathlib import Path
 
+import os
 import time
 import numpy as np
 import pytest
@@ -710,3 +711,17 @@ def test_multimeter_close_does_not_wait_for_a_hung_read(cfg, monkeypatch):
     m.close()
     assert time.monotonic() - t0 < 2
     m._lock.release()
+
+
+def test_only_one_app_on_the_instruments(tmp_path):
+    """A second MOKEapp must not start while one holds the instrument lock (they fought over GPIB)."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])     # GUI tests later need a QApplication
+    import main
+    path = tmp_path / "instruments.lock"
+    first = main.instance_lock(path, 0)
+    assert first is not None
+    assert main.instance_lock(path, 100) is None
+    first.unlock()
+    assert main.instance_lock(path, 0) is not None

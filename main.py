@@ -14,7 +14,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QDir, QLockFile, QSettings
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -54,6 +54,21 @@ def setup_logging() -> Path:
     return path
 
 
+INSTANCE_LOCK = Path(QDir.tempPath()) / "MOKEapp-instruments.lock"
+LOCK_WAIT_MS = 15000    # a restart after Setup starts the new app while the old one is still closing
+
+
+def instance_lock(path: Path = INSTANCE_LOCK, wait_ms: int = LOCK_WAIT_MS) -> QLockFile | None:
+    """One MOKEapp at a time on the real instruments: two would fight over GPIB and both drive the magnet.
+
+    Returns the held lock (keep a reference until exit) or None if another MOKEapp holds it. A lock left
+    by a crashed app is detected as stale (its process is gone) and taken over.
+    """
+    lock = QLockFile(str(path))
+    lock.setStaleLockTime(0)        # stale only when its process no longer exists
+    return lock if lock.tryLock(wait_ms) else None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="MOKEapp: MOKE measurement control")
     ap.add_argument("--config", default=None, help="setup file (default: the last one used on this PC)")
@@ -71,6 +86,15 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("MOKEapp")
     app.setWindowIcon(QIcon(str(ROOT / "mokeapp" / "gui" / "assets" / "icon.ico")))
+    lock = None
+    if not args.sim:
+        lock = instance_lock()
+        if lock is None:
+            log.warning("Another MOKEapp is already using the instruments: not starting")
+            QMessageBox.warning(None, "MOKEapp", "MOKEapp is already open on this PC (look in the taskbar).\n\n"
+                                "Two copies would fight over the multimeter and the magnet, so this one will "
+                                "not start. Close the other one first.")
+            return 1
     prefs = QSettings("USM", "MOKEapp")     # per PC and Windows user (registry)
     setup_path = choose_setup(args.config, prefs)
     if setup_path is None:

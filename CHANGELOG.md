@@ -2,6 +2,12 @@
 
 All notable changes to MOKEapp. Dates are when the version was handed to the lab.
 
+## 0.2.10 — 2026-11-18
+- **Only one MOKEapp at a time on the real instruments.** Two copies opened a minute apart fought over the
+  GPIB bus (Connect took ~20 s per attempt and failed with VI_ERROR_ABORT) and could both drive the magnet.
+  A second copy now explains that one is already open and does not start; a restart after Setup waits up to
+  15 s for the old copy to close. Simulated mode (`--sim`) is not limited.
+
 ## 0.2.9 — 2026-11-18
 - **Fix: closing the window froze the app ("not responding").** When a multimeter read hung on GPIB (timeout
   plus a ~16 s bus clear), closing waited for it on the GUI thread. Now the window keeps repainting while the
