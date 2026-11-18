@@ -21,7 +21,10 @@ log = logging.getLogger(__name__)
 ACTIVE_FILE = "active.yaml"
 UNIT = "mT"
 MT_TO_OE = 10.0     # 1 mT of μ0H = 10 Oe of H (in air)
-DEGREE_NAMES = {1: "linear", 2: "polynomial 2", 3: "polynomial 3"}
+# Odd high degrees follow an iron yoke up to saturation (B(I) is close to an odd function); check each one
+# against a sweep it was not fitted to, since a high degree can also follow noise.
+DEGREE_NAMES = {1: "linear", 2: "polynomial 2", 3: "polynomial 3", 5: "polynomial 5", 7: "polynomial 7",
+                9: "polynomial 9", 11: "polynomial 11"}
 
 
 class CalibrationError(Exception):
@@ -109,7 +112,7 @@ def fit(coil: str, currents, fields, degree: int = 1, through_origin: bool = Fal
     i = np.asarray(currents, dtype=float)
     b = np.asarray(fields, dtype=float)
     if degree not in DEGREE_NAMES:
-        raise CalibrationError("Degree must be 1, 2 or 3")
+        raise CalibrationError("Degree must be one of " + ", ".join(map(str, DEGREE_NAMES)))
     if current_source not in CURRENT_SOURCES:
         raise CalibrationError(f"Unknown current source {current_source!r}")
     if len(i) != len(b):
@@ -118,11 +121,20 @@ def fit(coil: str, currents, fields, degree: int = 1, through_origin: bool = Fal
         raise CalibrationError(f"A {DEGREE_NAMES[degree]} fit needs at least {degree + 2} points")
     if np.ptp(i) == 0:
         raise CalibrationError("All currents are equal: measure at several currents")
-    if through_origin:
-        powers = np.column_stack([i ** k for k in range(1, degree + 1)])
-        coefs = np.concatenate([[0.0], np.linalg.lstsq(powers, b, rcond=None)[0]])
-    else:
-        coefs = np.polynomial.polynomial.polyfit(i, b, degree)
+    # fit in x = I / scale (|x| <= 1) so high degrees stay well conditioned, then store plain coefficients of I
+    scale = float(np.max(np.abs(i)))
+    x = i / scale
+    first = 1 if through_origin else 0
+    powers = np.column_stack([x ** k for k in range(first, degree + 1)])
+    scaled = np.linalg.lstsq(powers, b, rcond=None)[0]
+    coefs = np.concatenate([[0.0] * first, scaled]) / scale ** np.arange(degree + 1)
+    if degree > 1:
+        grid = np.linspace(i.min(), i.max(), 2001)
+        steps = np.diff(apply_calibration(grid, coefs))
+        if not (np.all(steps > 0) or np.all(steps < 0)):
+            raise CalibrationError(f"The {DEGREE_NAMES[degree]} fit goes up and down between "
+                                   f"{i.min():.3g} and {i.max():.3g} A, so a field would match two currents. "
+                                   "Try another degree.")
     resid = b - apply_calibration(i, coefs)
     ss_tot = float(np.sum((b - b.mean()) ** 2))
     r2 = 1 - float(np.sum(resid ** 2)) / ss_tot if ss_tot > 0 else 0.0

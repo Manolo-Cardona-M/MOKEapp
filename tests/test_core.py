@@ -341,6 +341,38 @@ def test_polynomial_fit_follows_saturation():
     assert lin.r2 < 0.999 < cub.r2 and cub.max_residual_mT < lin.max_residual_mT / 5
 
 
+def test_high_degree_fit_follows_deep_saturation():
+    # like the P-MOKE yoke: linear ~21 mT/A at low current, saturating towards ~180 mT at 15 A, slightly asymmetric
+    i = np.linspace(-15, 15, 121)
+    b = -150 * np.tanh(i / 7) - 2 * i - 3 * np.tanh(i / 3) ** 2 + np.random.default_rng(1).normal(0, 0.2, i.size)
+    with pytest.raises(calibration.CalibrationError, match="up and down"):
+        calibration.fit("c", i, b, 3)           # a cubic curls back near the ends: refused, not saved
+    p5 = calibration.fit("c", i, b, 5)
+    p11 = calibration.fit("c", i, b, 11)
+    assert p11.max_residual_mT < 1.5 < 3 < p5.max_residual_mT
+    assert p11.degree == 11 and len(p11.coefficients) == 12 and "polynomial 11" in p11.summary()
+    # stored as plain coefficients of I (same file format as before): the same curve as a direct fit
+    assert np.allclose(p11.coefficients, np.polynomial.polynomial.polyfit(i, b, 11), rtol=1e-6, atol=1e-12)
+    assert p11.current_for(float(p11.field(9.0))) == pytest.approx(9.0, abs=1e-2)   # invertible
+
+
+def test_fit_that_goes_up_and_down_is_refused():
+    i = np.linspace(-3, 3, 13)
+    b = 50 * i - 4 * i ** 3          # rises then falls back: one field would match two currents
+    with pytest.raises(calibration.CalibrationError, match="up and down"):
+        calibration.fit("c", i, b, 3)
+    with pytest.raises(calibration.CalibrationError, match="one of 1, 2, 3, 5"):
+        calibration.fit("c", i, 10 * i, 4)
+
+
+def test_high_degree_fit_through_origin():
+    i = np.linspace(-10, 10, 41)
+    b = 120 * np.tanh(i / 6) + 0.7      # offset ignored when forced through 0
+    cal = calibration.fit("c", i, b, 7, through_origin=True)
+    assert cal.coefficients[0] == 0 and float(cal.field(0)) == 0
+    assert cal.max_residual_mT < 1.5
+
+
 def _cal(coil, slope, date):
     c = calibration.fit(coil, [-2, -1, 0, 1, 2], [-2 * slope, -slope, 0, slope, 2 * slope])
     c.date = date

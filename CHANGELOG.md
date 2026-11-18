@@ -2,6 +2,19 @@
 
 All notable changes to MOKEapp. Dates are when the version was handed to the lab.
 
+## 0.2.8 — 2026-11-18
+- **Field calibration up to saturation:** the Calibration tab's Model list adds polynomials of degree 5, 7,
+  9 and 11 (same selector, no new controls), so one calibration can cover the whole range of an iron-yoke
+  magnet. The fit is done in I / max|I| (well conditioned at high degree) and still stored as plain
+  coefficients of I, so calibration files keep their format.
+- A fit that goes up and down inside its current range is refused with the reason (a field would match two
+  currents, and `current_for` could not invert it). A cubic over a deeply saturated range is refused this
+  way, and so are degree 7 and 9 fits of the P-MOKE data, which wiggle near the ends.
+- P-MOKE calibrated with an external USB Hall teslameter (sweeps to ±20, ±10 and ±2 V, both branches, probe
+  ~5 mm from the pole): polynomial 11 over −14.6…15.0 A (≈ ±180 mT), −20.09 mT/A at 0 A, max residual
+  5.2 mT; reproduces a sweep not used in the fit to 1.3 mT rms. Sweeps differ by ~2–3 % with coil
+  temperature and magnetic history, which is the floor of any fit.
+
 ## 0.2.7 — 2026-11-17
 - **Variable intervals** in Hysteresis: a "Variable intervals" button under Sweep unfolds a table of X
   intervals (From, To, Points, Settle), so the saturations can be swept coarse and fast and the switching

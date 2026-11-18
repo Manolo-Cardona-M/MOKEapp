@@ -451,8 +451,8 @@ class CalibrationTab(QWidget):
                  f"Valid for {lo:.3g} … {hi:.3g} A ({len(pts)} points), {cal.current_source} current"]
         warn = "<span style='color:#b45309'>{}</span>"
         if cal.r2 < GOOD_R2 and cal.degree == 1:
-            lines.append(warn.format("The points curve away from a line (iron saturation?): try Polynomial 3, "
-                                     "or calibrate a smaller current range."))
+            lines.append(warn.format("The points curve away from a line (iron saturation?): try Polynomial 3 "
+                                     "(or 5–11 up to saturation), or calibrate a smaller current range."))
         if lo >= 0 or hi <= 0:
             lines.append(warn.format("All points have the same sign: the other half of every loop is "
                                      "extrapolated. Measure negative currents too."))
