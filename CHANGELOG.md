@@ -2,6 +2,14 @@
 
 All notable changes to MOKEapp. Dates are when the version was handed to the lab.
 
+## 0.2.9 — 2026-11-18
+- **Fix: closing the window froze the app ("not responding").** When a multimeter read hung on GPIB (timeout
+  plus a ~16 s bus clear), closing waited for it on the GUI thread. Now the window keeps repainting while the
+  background tasks stop (magnet to 0 V first), the multimeter close gives up on a meter another thread is still
+  waiting for, and a call still blocked inside VISA no longer keeps the process alive. Disconnect waits the
+  same way.
+- Test fix: the variable-intervals panel test used the nominal magnet R where the panel uses the measured one.
+
 ## 0.2.8 — 2026-11-18
 - **Field calibration up to saturation:** the Calibration tab's Model list adds polynomials of degree 5, 7,
   9 and 11 (same selector, no new controls), so one calibration can cover the whole range of an iron-yoke

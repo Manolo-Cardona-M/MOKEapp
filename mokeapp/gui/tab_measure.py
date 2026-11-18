@@ -273,10 +273,12 @@ class MeasureTab(QWidget):
     def on_cycle(self, cd, avg): ...
     def on_finished(self, result): ...
 
-    def shutdown(self):
-        if self.thread is not None:
-            self.thread.runner.stop()
-            self.thread.wait(30000)
+    def stop_tasks(self) -> list:
+        """Ask a running sweep to stop (it ramps the magnet to 0); return its thread (the caller waits)."""
+        if self.thread is None or not self.thread.isRunning():
+            return []
+        self.thread.runner.stop()
+        return [self.thread]
 
 
 class ContinuousTab(MeasureTab):

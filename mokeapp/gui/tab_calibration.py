@@ -481,5 +481,5 @@ class CalibrationTab(QWidget):
         self._show_fit(cal, saved=True)
         self.state.refresh_calibration()
 
-    def shutdown(self):
-        pass
+    def stop_tasks(self) -> list:
+        return []

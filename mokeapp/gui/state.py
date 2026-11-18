@@ -1,8 +1,9 @@
 """Shared application state and background threads."""
 import logging
 import threading
+import time
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal
 
 from mokeapp.core.acquisition import SweepRunner
 from mokeapp.core.calibration import CalibrationLibrary
@@ -111,6 +112,16 @@ class AppState(QObject):
             self.runner.stop()          # the sweep thread ramps to 0 in its finally block
         elif not self.busy:
             self.inst.safe_zero()
+
+
+def wait_threads(threads, timeout_s: float) -> int:
+    """Wait for QThreads to finish without blocking the GUI; return how many are still running."""
+    deadline = time.monotonic() + timeout_s
+    while any(t.isRunning() for t in threads) and time.monotonic() < deadline:
+        QCoreApplication.processEvents()
+        for t in threads:
+            t.wait(20)
+    return sum(t.isRunning() for t in threads)
 
 
 class FuncThread(QThread):

@@ -1,6 +1,7 @@
 from dataclasses import asdict
 from pathlib import Path
 
+import time
 import numpy as np
 import pytest
 import yaml
@@ -695,3 +696,17 @@ def test_calibration_current_for_inverts_the_fit():
     assert cal.current_for(75.0) == pytest.approx(1.5, abs=1e-3)
     with pytest.raises(calibration.CalibrationError):
         cal.current_for(500.0)
+
+
+def test_multimeter_close_does_not_wait_for_a_hung_read(cfg, monkeypatch):
+    """A read stuck in VISA (GPIB timeout + clear) holds the meter's lock: closing must not freeze on it."""
+    from mokeapp.drivers import multimeter
+    monkeypatch.setattr(multimeter, "CLOSE_LOCK_S", 0.2)
+    k2000 = _FakeInst("KEITHLEY INSTRUMENTS INC.,MODEL 2000,0,A")
+    m = multimeter.ScpiMultimeter(cfg.keithley, lambda: _FakeRM(k2000))
+    m.connect()
+    m._lock.acquire()           # another thread is inside read()
+    t0 = time.monotonic()
+    m.close()
+    assert time.monotonic() - t0 < 2
+    m._lock.release()

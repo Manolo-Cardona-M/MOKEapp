@@ -514,7 +514,7 @@ def test_variable_intervals_panel(window, tmp_path):
     assert hyst.params.points.value() == 2 * (10 + 59 + 9) - 2
     assert iv.table.horizontalHeaderItem(0).text() == "From (A)"
     assert iv.intervals()[0].x_from == pytest.approx(-3.0)     # stored in magnet volts...
-    r = win.state.cfg.kepco.magnet_resistance_ohm
+    r = iv._resistance()     # the measured R after diagnostics (simulated, slightly noisy), else nominal
     assert float(iv.table.item(0, 0).text()) == pytest.approx(-3.0 / r, abs=1e-3)   # ...shown in A
 
     iv.set_cell(1, 0, float(iv.table.item(1, 0).text()) + 0.2)                   # gap: Start blocked
@@ -536,3 +536,29 @@ def test_variable_intervals_panel(window, tmp_path):
 
     iv.toggle.setChecked(False)                                # back to the plain sweep
     assert hyst.params.points.isEnabled() and hyst.settings().intervals is None
+
+
+def test_close_with_a_hung_instrument_call_does_not_freeze(window, monkeypatch):
+    """Closing while the live readout is stuck in a multimeter read: the window keeps processing events,
+    the magnet goes to 0 V and the app is marked to end the process instead of waiting for the thread."""
+    import threading
+    from mokeapp.gui import main_window
+    from mokeapp.gui.state import FuncThread
+    app, win = window
+    monkeypatch.setattr(main_window, "CLOSE_WAIT_S", 0.5)
+    release = threading.Event()
+    stuck = FuncThread(lambda: release.wait(10), win.instruments)
+    win.instruments._poller = stuck
+    stuck.start()
+    ticks = []
+    from PySide6.QtCore import QTimer
+    timer = QTimer()
+    timer.timeout.connect(lambda: ticks.append(1))
+    timer.start(10)
+    t0 = time.monotonic()
+    win.close()
+    assert time.monotonic() - t0 < 5 and ticks           # the event loop ran while waiting
+    assert win.force_exit and win.state.inst.kepco.output_V == 0.0
+    timer.stop()
+    release.set()
+    stuck.wait(5000)

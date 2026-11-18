@@ -9,6 +9,7 @@ On a PC with no setup yet, the app opens Instruments → Setup to choose the ins
 import argparse
 import atexit
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -99,7 +100,12 @@ def main() -> int:
     sys.excepthook = excepthook
 
     win.showMaximized()
-    return app.exec()
+    code = app.exec()
+    if getattr(win, "force_exit", False):
+        # a thread is still blocked in an instrument call (magnet already at 0 V): Python would wait for it
+        logging.shutdown()
+        os._exit(code)
+    return code
 
 
 if __name__ == "__main__":

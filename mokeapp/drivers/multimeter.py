@@ -16,6 +16,7 @@ from mokeapp.config import KeithleyConfig
 log = logging.getLogger(__name__)
 
 LINE_FREQ_HZ = 50       # Chile; 1 PLC = 20 ms
+CLOSE_LOCK_S = 2.0      # at close, give up on a meter that another thread is still waiting for
 CONNECT_ATTEMPTS = 3    # the first GPIB open after a previous session sometimes fails with VI_ERROR_BERR
 
 
@@ -196,14 +197,19 @@ class ScpiMultimeter:
 
     def close(self) -> None:
         if self._inst is not None:
+            # another thread may be stuck in a read/clear that only VISA can end: don't wait for it at close
+            if not self._lock.acquire(timeout=CLOSE_LOCK_S):
+                log.warning("Multimeter busy at close: left to the operating system")
+                return
             try:
-                with self._lock:
-                    for cmd in self.profile.release:     # 2000: front panel measures continuously again
-                        self._inst.write(cmd)
-                    # Go To Local (over GPIB; :SYST:LOC is RS-232 only and raises -221 on a 2000)
-                    self._inst.control_ren(pyvisa.constants.RENLineOperation.address_gtl)
+                for cmd in self.profile.release:     # 2000: front panel measures continuously again
+                    self._inst.write(cmd)
+                # Go To Local (over GPIB; :SYST:LOC is RS-232 only and raises -221 on a 2000)
+                self._inst.control_ren(pyvisa.constants.RENLineOperation.address_gtl)
             except Exception:
                 pass
+            finally:
+                self._lock.release()
             try:
                 self._inst.close()
             except Exception:

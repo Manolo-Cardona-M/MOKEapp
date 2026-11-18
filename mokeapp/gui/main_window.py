@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QMainW
 
 import mokeapp
 from mokeapp.gui import theme
-from mokeapp.gui.state import AppState
+from mokeapp.gui.state import AppState, wait_threads
 from mokeapp.gui.tab_analysis import AnalysisTab
 from mokeapp.gui.tab_calibration import CalibrationTab
 from mokeapp.gui.tab_instruments import InstrumentsTab
@@ -18,6 +18,8 @@ from mokeapp.gui.tab_measure import ContinuousTab, HysteresisTab
 from mokeapp.gui.widgets import WheelGuard
 
 log = logging.getLogger(__name__)
+
+CLOSE_WAIT_S = 35.0     # a sweep needs a moment to ramp the magnet down; a hung VISA call ~20 s
 
 
 class MainWindow(QMainWindow):
@@ -154,10 +156,19 @@ class MainWindow(QMainWindow):
             if ans != QMessageBox.Yes:
                 event.ignore()
                 return
-        for tab in (self.continuous, self.hysteresis, self.instruments, self.calibration):
-            tab.shutdown()
+        # Stop the background tasks and wait for them while the window keeps repainting: a multimeter read
+        # that hangs (GPIB timeout + clear can take ~20 s) must not freeze the window ("not responding").
+        self.banner.setText("Closing: stopping measurements, magnet to 0 V ...")
+        threads = [t for tab in (self.continuous, self.hysteresis, self.instruments, self.calibration)
+                   for t in tab.stop_tasks()]
+        stuck = wait_threads(threads, CLOSE_WAIT_S)
         # the wheel guard filters every event of the whole application: don't leave it behind
         QApplication.instance().removeEventFilter(self._wheel_guard)
         self.state.inst.close()
+        if stuck:
+            # an instrument call is still blocked inside VISA: the magnet is already at 0 V (DAQ), so end
+            # the process instead of waiting for it (main.py checks this after the event loop)
+            log.warning("%d background task(s) still blocked on an instrument at exit", stuck)
+            self.force_exit = True
         log.info("Application closed, magnet at 0 V")
         event.accept()

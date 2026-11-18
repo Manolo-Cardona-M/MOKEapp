@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout
 from mokeapp.core.diagnostics import run_diagnostics
 from mokeapp.core.heating import MagnetHeat
 from mokeapp.gui.setup_dialog import SetupDialog
-from mokeapp.gui.state import FuncThread
+from mokeapp.gui.state import FuncThread, wait_threads
 from mokeapp.gui.widgets import COLORS, MagnetHeatPill, StatusLight
 
 log = logging.getLogger(__name__)
@@ -277,7 +277,7 @@ class InstrumentsTab(QWidget):
     def do_disconnect(self):
         self.timer.stop()
         if self._poller is not None:
-            self._poller.wait(10000)
+            wait_threads([self._poller], 10.0)     # without freezing the window
         self.state.inst.close()
         self.state.diagnostics = None
         self.state.diagnostics_changed.emit()
@@ -461,8 +461,7 @@ class InstrumentsTab(QWidget):
         if hall is not None:
             self.live_b.setText(f"{hall:+8.3f} mT")
 
-    def shutdown(self):
+    def stop_tasks(self) -> list:
+        """Stop the live readout; return the background threads still running (the caller waits)."""
         self.timer.stop()
-        for t in (self._thread, self._poller):
-            if t is not None:
-                t.wait(10000)
+        return [t for t in (self._thread, self._poller) if t is not None and t.isRunning()]
